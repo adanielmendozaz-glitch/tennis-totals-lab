@@ -2,6 +2,8 @@ import './style.css';
 import { getTodayMatches } from './data/espn.js';
 import { enrichMatchesWithStats } from './engine/playerStats.js';
 import { enrichMatchesWithMatchup } from './engine/matchup.js';
+import { getMatchMarkets } from './data/espnOdds.js';
+import { evaluateMarket } from './engine/market.js';
 
 const app = document.querySelector('#app');
 
@@ -26,7 +28,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.4.1</div>
+        <div class="version">ATP + WTA · v0.5.0</div>
       </div>
 
       <button
@@ -873,6 +875,255 @@ function totalsPanel(match) {
   `;
 }
 
+function marketOddsText(value) {
+  const n =
+    Number(value);
+
+  if (!Number.isFinite(n)) {
+    return '—';
+  }
+
+  return n > 0
+    ? `+${n}`
+    : `${n}`;
+}
+
+function marketNumber(value) {
+  const n =
+    Number(value);
+
+  return Number.isFinite(n)
+    ? n
+    : null;
+}
+
+function marketPanel(match) {
+  if (!match.totals) {
+    return '';
+  }
+
+  /*
+   * El Market Engine es exclusivamente
+   * PRE-MATCH en esta fase.
+   */
+  if (match.state !== 'pre') {
+    return '';
+  }
+
+  const consensus =
+    match.totals
+      ?.diagnostics
+      ?.consensusStatus;
+
+  if (
+    consensus !== 'STABLE'
+  ) {
+    return `
+      <div class="market-box blocked">
+
+        <div class="market-box-head">
+          <span>MARKET ENGINE</span>
+
+          <strong class="market-status pass">
+            PASS
+          </strong>
+        </div>
+
+        <div class="market-empty">
+          Mercado bloqueado · Consensus ${consensus || '—'}
+        </div>
+
+      </div>
+    `;
+  }
+
+  if (match.marketLoading) {
+    return `
+      <div class="market-box">
+
+        <div class="market-box-head">
+          <span>MARKET ENGINE</span>
+          <strong>BUSCANDO...</strong>
+        </div>
+
+        <div class="market-empty">
+          Consultando línea O/U real
+        </div>
+
+      </div>
+    `;
+  }
+
+  if (
+    match.marketChecked &&
+    !match.marketDecision
+  ) {
+    return `
+      <div class="market-box">
+
+        <div class="market-box-head">
+          <span>MARKET ENGINE</span>
+
+          <strong class="market-status no-market">
+            NO MARKET
+          </strong>
+        </div>
+
+        <div class="market-empty">
+          ESPN no publicó total utilizable para este partido.
+        </div>
+
+      </div>
+    `;
+  }
+
+  const m =
+    match.marketDecision;
+
+  if (!m) {
+    return '';
+  }
+
+  const recommendation =
+    m.recommendation ||
+    'PASS';
+
+  const side =
+    m.bestSide ||
+    '—';
+
+  const modelProbability =
+    side === 'OVER'
+      ? marketNumber(
+          m.model?.overPct
+        )
+      : side === 'UNDER'
+        ? marketNumber(
+            m.model?.underPct
+          )
+        : null;
+
+  const breakEven =
+    side === 'OVER'
+      ? marketNumber(
+          m.market
+            ?.overBreakEvenPct
+        )
+      : side === 'UNDER'
+        ? marketNumber(
+            m.market
+              ?.underBreakEvenPct
+          )
+        : null;
+
+  return `
+    <div class="market-box">
+
+      <div class="market-box-head">
+
+        <span>
+          MARKET ENGINE · ${m.provider || 'ESPN'}
+        </span>
+
+        <strong class="market-status ${recommendation.toLowerCase()}">
+          ${recommendation}
+        </strong>
+
+      </div>
+
+      <div class="market-summary">
+
+        <div>
+          <span>LINE</span>
+          <strong>
+            O/U ${Number(m.line).toFixed(1)}
+          </strong>
+        </div>
+
+        <div>
+          <span>BEST SIDE</span>
+          <strong>
+            ${side}
+          </strong>
+        </div>
+
+        <div>
+          <span>MODEL</span>
+          <strong>
+            ${
+              modelProbability !== null
+                ? `${modelProbability.toFixed(1)}%`
+                : '—'
+            }
+          </strong>
+        </div>
+
+        <div>
+          <span>EDGE</span>
+          <strong>
+            ${
+              m.bestEdgePct !== null &&
+              Number.isFinite(
+                Number(m.bestEdgePct)
+              )
+                ? `${Number(m.bestEdgePct) >= 0 ? '+' : ''}${Number(m.bestEdgePct).toFixed(1)} pp`
+                : 'NO PRICE'
+            }
+          </strong>
+        </div>
+
+      </div>
+
+      <div class="market-prices">
+
+        <span>
+          OVER
+          <strong>
+            ${marketOddsText(m.market?.overOdds)}
+          </strong>
+        </span>
+
+        <span>
+          UNDER
+          <strong>
+            ${marketOddsText(m.market?.underOdds)}
+          </strong>
+        </span>
+
+        <span>
+          BREAK-EVEN
+          <strong>
+            ${
+              breakEven !== null
+                ? `${breakEven.toFixed(1)}%`
+                : '—'
+            }
+          </strong>
+        </span>
+
+        <span>
+          FAIR
+          <strong>
+            ${marketOddsText(m.fairOdds)}
+          </strong>
+        </span>
+
+      </div>
+
+      <div class="market-reason">
+        ${
+          m.reason === 'VALUE'
+            ? 'VALOR DETECTADO · candidato para Ranking'
+            : m.reason === 'NO_PRICE'
+              ? 'LÍNEA DISPONIBLE · PRECIO NO DISPONIBLE'
+              : 'SIN EDGE SUFICIENTE'
+        }
+      </div>
+
+    </div>
+  `;
+}
+
 function matchCard(match) {
   const maxSets = Math.max(
     match.playerA.sets.length,
@@ -948,6 +1199,8 @@ function matchCard(match) {
       ${matchupPanel(match)}
 
       ${totalsPanel(match)}
+
+      ${marketPanel(match)}
 
       <div class="model-strip">
         <span>Totals Engine</span>
@@ -1355,6 +1608,11 @@ function startTotalsEngine(
       eligible.length
     );
 
+    void startMarketEngine(
+      snapshot,
+      generation
+    );
+
     return;
   }
 
@@ -1465,6 +1723,11 @@ function startTotalsEngine(
           totalsWorker.terminate();
           totalsWorker = null;
         }
+
+        void startMarketEngine(
+          matches,
+          generation
+        );
       }
     };
 
@@ -1487,6 +1750,143 @@ function startTotalsEngine(
     matches:
       pending
   });
+}
+
+async function startMarketEngine(
+  snapshot,
+  generation
+) {
+  const candidates =
+    snapshot.filter(
+      match =>
+        match.state === 'pre' &&
+        match.matchup?.markovReady &&
+        match.totals &&
+        match.totals
+          ?.diagnostics
+          ?.consensusStatus ===
+          'STABLE'
+    );
+
+  if (!candidates.length) {
+    return;
+  }
+
+  for (
+    const match
+    of candidates
+  ) {
+    match.marketLoading = true;
+    match.marketChecked = false;
+    match.marketDecision = null;
+  }
+
+  renderMatches();
+
+  /*
+   * Máximo cuatro requests
+   * simultáneos contra ESPN.
+   */
+  let cursor = 0;
+
+  async function runner() {
+    while (
+      cursor <
+      candidates.length
+    ) {
+      const index =
+        cursor++;
+
+      const match =
+        candidates[index];
+
+      try {
+        const markets =
+          await getMatchMarkets(
+            match
+          );
+
+        if (
+          generation !==
+          statsGeneration
+        ) {
+          return;
+        }
+
+        /*
+         * Preferimos un mercado
+         * con precios para ambos lados.
+         */
+        const preferred =
+          markets.find(
+            market =>
+              market.overOdds !== null &&
+              market.underOdds !== null
+          ) ||
+          markets[0] ||
+          null;
+
+        match.markets =
+          markets;
+
+        match.marketDecision =
+          preferred
+            ? evaluateMarket(
+                match,
+                preferred
+              )
+            : null;
+
+      } catch (error) {
+        console.warn(
+          'Market Engine',
+          match.id,
+          error
+        );
+
+        match.marketDecision =
+          null;
+
+      } finally {
+        match.marketLoading =
+          false;
+
+        match.marketChecked =
+          true;
+      }
+
+      if (
+        generation !==
+        statsGeneration
+      ) {
+        return;
+      }
+
+      renderMatches();
+    }
+  }
+
+  const workers =
+    Math.min(
+      4,
+      candidates.length
+    );
+
+  await Promise.all(
+    Array.from(
+      {
+        length: workers
+      },
+      () => runner()
+    )
+  );
+
+  if (
+    generation ===
+    statsGeneration
+  ) {
+    renderMatches();
+  }
 }
 
 function renderMatchupLoading() {
