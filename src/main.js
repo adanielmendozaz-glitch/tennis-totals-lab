@@ -12,6 +12,13 @@ let loading = false;
 let lastUpdated = null;
 let statsGeneration = 0;
 
+let totalsWorker = null;
+
+const totalsCache = new Map();
+
+const TOTALS_SIMULATIONS = 50000;
+
+
 app.innerHTML = `
   <main class="shell">
 
@@ -19,7 +26,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.2.2</div>
+        <div class="version">ATP + WTA · v0.3.0</div>
       </div>
 
       <button
@@ -232,6 +239,60 @@ app.innerHTML = `
           id="matchupEngineDetail"
           class="matchup-engine-detail">
           Surface-adjusted baselines
+        </div>
+
+      </section>
+
+      <section
+        id="totalsEnginePanel"
+        class="totals-engine">
+
+        <div class="totals-engine-head">
+
+          <div>
+            <span>TOTALS ENGINE</span>
+
+            <strong id="totalsEngineTitle">
+              Esperando Matchup Engine...
+            </strong>
+          </div>
+
+          <span
+            id="totalsEngineBadge"
+            class="totals-engine-badge waiting">
+            WAIT
+          </span>
+
+        </div>
+
+        <div class="totals-engine-metrics">
+
+          <div>
+            <span>READY</span>
+            <strong id="totalsReady">—</strong>
+          </div>
+
+          <div>
+            <span>QUEUE</span>
+            <strong id="totalsQueue">—</strong>
+          </div>
+
+          <div>
+            <span>MC / MATCH</span>
+            <strong>50K</strong>
+          </div>
+
+          <div>
+            <span>MODE</span>
+            <strong>PRE</strong>
+          </div>
+
+        </div>
+
+        <div
+          id="totalsEngineProgress"
+          class="totals-engine-progress">
+          Markov → Set → Match → Total Games
         </div>
 
       </section>
@@ -586,6 +647,175 @@ function matchupPanel(match) {
   `;
 }
 
+function totalsFingerprint(match) {
+  return [
+    match.id,
+    match.tour,
+    match.tournament,
+    match.round,
+    match.surface,
+    match.matchup?.playerA?.servePointPct,
+    match.matchup?.playerB?.servePointPct,
+    match.matchup?.playerA?.holdPct,
+    match.matchup?.playerB?.holdPct,
+    TOTALS_SIMULATIONS
+  ].join('|');
+}
+
+function curveForDisplay(totals) {
+  const target =
+    Math.floor(totals.medianGames) - 0.5;
+
+  return [...totals.curve]
+    .sort(
+      (a, b) =>
+        Math.abs(a.line - target) -
+        Math.abs(b.line - target)
+    )
+    .slice(0, 5)
+    .sort(
+      (a, b) =>
+        a.line - b.line
+    );
+}
+
+function totalsPanel(match) {
+  if (!match.matchup?.markovReady) {
+    return '';
+  }
+
+  const totals = match.totals;
+
+  if (!totals) {
+    return `
+      <div class="totals-box pending">
+
+        <div class="totals-box-head">
+          <span>TOTALS ENGINE</span>
+          <strong>50K MC</strong>
+        </div>
+
+        <div class="totals-pending">
+          Monte Carlo en cola...
+        </div>
+
+      </div>
+    `;
+  }
+
+  const curve =
+    curveForDisplay(totals);
+
+  const liveNotice =
+    match.state === 'in'
+      ? `
+        <div class="totals-live-warning">
+          PRE-MATCH BASELINE
+          · todavía no ajustado al marcador LIVE
+        </div>
+      `
+      : '';
+
+  return `
+    <div class="totals-box">
+
+      <div class="totals-box-head">
+
+        <span>
+          TOTALS ENGINE · ${totals.mode}
+        </span>
+
+        <strong class="totals-ready-badge">
+          ${(totals.simulations / 1000).toFixed(0)}K MC
+        </strong>
+
+      </div>
+
+      ${liveNotice}
+
+      <div class="totals-summary">
+
+        <div>
+          <span>EXPECTED</span>
+          <strong>
+            ${totals.expectedGames.toFixed(2)}
+          </strong>
+        </div>
+
+        <div>
+          <span>MEDIAN</span>
+          <strong>
+            ${totals.medianGames}
+          </strong>
+        </div>
+
+        <div>
+          <span>DECIDING SET</span>
+          <strong>
+            ${totals.decidingSetPct.toFixed(1)}%
+          </strong>
+        </div>
+
+        <div>
+          <span>TIEBREAK</span>
+          <strong>
+            ${totals.tiebreakPct.toFixed(1)}%
+          </strong>
+        </div>
+
+      </div>
+
+      <div class="totals-curve">
+
+        <div class="totals-curve-head">
+          <span>LINE</span>
+          <span>OVER</span>
+          <span>UNDER</span>
+        </div>
+
+        ${curve.map(row => `
+          <div class="totals-curve-row">
+
+            <strong>
+              ${row.line.toFixed(1)}
+            </strong>
+
+            <span>
+              ${row.overPct.toFixed(1)}%
+            </span>
+
+            <span>
+              ${row.underPct.toFixed(1)}%
+            </span>
+
+          </div>
+        `).join('')}
+
+      </div>
+
+      <div class="totals-foot">
+
+        <span>
+          BO${totals.bestOf}
+          · σ ${totals.sdGames.toFixed(2)}
+          · Sets ${totals.expectedSets.toFixed(2)}
+        </span>
+
+        <span>
+          MC SE ≤ ±${totals.maxProbabilitySePct.toFixed(2)}%
+        </span>
+
+      </div>
+
+      <div class="totals-no-pick">
+        DISTRIBUCIÓN DEL MODELO
+        · TODAVÍA SIN PLAY/LEAN/PASS
+      </div>
+
+    </div>
+  `;
+}
+
 function matchCard(match) {
   const maxSets = Math.max(
     match.playerA.sets.length,
@@ -659,6 +889,8 @@ function matchCard(match) {
       ${statsPanel(match)}
 
       ${matchupPanel(match)}
+
+      ${totalsPanel(match)}
 
       <div class="model-strip">
         <span>Totals Engine</span>
@@ -878,6 +1110,326 @@ function renderDataHealth(health) {
       }
     </span>
   `;
+}
+
+function renderTotalsEngineStart({
+  eligible,
+  cached,
+  pending
+}) {
+  const badge =
+    document.querySelector(
+      '#totalsEngineBadge'
+    );
+
+  badge.className =
+    'totals-engine-badge running';
+
+  badge.textContent =
+    pending > 0
+      ? 'RUN'
+      : 'READY';
+
+  document.querySelector(
+    '#totalsEngineTitle'
+  ).textContent =
+    pending > 0
+      ? 'Monte Carlo procesando...'
+      : 'Distribuciones en caché';
+
+  document.querySelector(
+    '#totalsReady'
+  ).textContent =
+    `${cached}/${eligible}`;
+
+  document.querySelector(
+    '#totalsQueue'
+  ).textContent =
+    pending;
+
+  document.querySelector(
+    '#totalsEngineProgress'
+  ).textContent =
+    pending > 0
+      ? `Procesando ${pending} partidos FULL · 50,000 simulaciones cada uno`
+      : 'Todos los partidos elegibles ya calculados';
+}
+
+function renderTotalsProgress(
+  completed,
+  total,
+  cached,
+  eligible
+) {
+  document.querySelector(
+    '#totalsReady'
+  ).textContent =
+    `${cached + completed}/${eligible}`;
+
+  document.querySelector(
+    '#totalsQueue'
+  ).textContent =
+    Math.max(
+      0,
+      total - completed
+    );
+
+  const pct =
+    total
+      ? (
+          completed /
+          total *
+          100
+        )
+      : 100;
+
+  document.querySelector(
+    '#totalsEngineProgress'
+  ).textContent =
+    `Monte Carlo ${completed}/${total} · ${pct.toFixed(0)}% · UI disponible`;
+}
+
+function renderTotalsComplete(eligible) {
+  const badge =
+    document.querySelector(
+      '#totalsEngineBadge'
+    );
+
+  badge.className =
+    'totals-engine-badge ready';
+
+  badge.textContent =
+    'READY';
+
+  document.querySelector(
+    '#totalsEngineTitle'
+  ).textContent =
+    'Distribuciones calculadas';
+
+  document.querySelector(
+    '#totalsReady'
+  ).textContent =
+    `${eligible}/${eligible}`;
+
+  document.querySelector(
+    '#totalsQueue'
+  ).textContent =
+    '0';
+
+  document.querySelector(
+    '#totalsEngineProgress'
+  ).textContent =
+    `${eligible} partidos modelados · Markov + Monte Carlo`;
+}
+
+function renderTotalsError(message) {
+  const badge =
+    document.querySelector(
+      '#totalsEngineBadge'
+    );
+
+  badge.className =
+    'totals-engine-badge error';
+
+  badge.textContent =
+    'ERROR';
+
+  document.querySelector(
+    '#totalsEngineTitle'
+  ).textContent =
+    'Totals Engine detenido';
+
+  document.querySelector(
+    '#totalsEngineProgress'
+  ).textContent =
+    message ||
+    'Monte Carlo Worker Error';
+}
+
+function startTotalsEngine(
+  snapshot,
+  generation
+) {
+  if (totalsWorker) {
+    totalsWorker.terminate();
+    totalsWorker = null;
+  }
+
+  const eligible =
+    snapshot.filter(
+      match =>
+        match.matchup?.markovReady &&
+        match.state !== 'post'
+    );
+
+  let cached = 0;
+
+  const pending = [];
+
+  for (const match of eligible) {
+    const key =
+      totalsFingerprint(match);
+
+    const saved =
+      totalsCache.get(key);
+
+    if (saved) {
+      match.totals = saved;
+      cached++;
+    } else {
+      pending.push(match);
+    }
+  }
+
+  renderMatches();
+
+  renderTotalsEngineStart({
+    eligible:
+      eligible.length,
+
+    cached,
+
+    pending:
+      pending.length
+  });
+
+  if (pending.length === 0) {
+    renderTotalsComplete(
+      eligible.length
+    );
+
+    return;
+  }
+
+  try {
+    totalsWorker =
+      new Worker(
+        new URL(
+          './workers/totals.worker.js',
+          import.meta.url
+        ),
+        {
+          type: 'module'
+        }
+      );
+
+  } catch (error) {
+    renderTotalsError(
+      error?.message
+    );
+
+    return;
+  }
+
+  let renderedAt = 0;
+
+  totalsWorker.onmessage =
+    event => {
+
+      const data =
+        event.data || {};
+
+      if (
+        data.generation !==
+        generation
+      ) {
+        return;
+      }
+
+      if (
+        data.type === 'RESULT'
+      ) {
+        const match =
+          matches.find(
+            item =>
+              String(item.id) ===
+              String(data.matchId)
+          );
+
+        if (match) {
+          match.totals =
+            data.result;
+
+          totalsCache.set(
+            totalsFingerprint(match),
+            data.result
+          );
+        }
+
+        renderTotalsProgress(
+          data.completed,
+          data.total,
+          cached,
+          eligible.length
+        );
+
+        if (
+          data.completed -
+          renderedAt >= 4 ||
+          data.completed ===
+          data.total
+        ) {
+          renderedAt =
+            data.completed;
+
+          renderMatches();
+        }
+      }
+
+      if (
+        data.type ===
+        'MATCH_ERROR'
+      ) {
+        console.warn(
+          'Totals match error',
+          data.matchId,
+          data.error
+        );
+
+        renderTotalsProgress(
+          data.completed,
+          data.total,
+          cached,
+          eligible.length
+        );
+      }
+
+      if (
+        data.type ===
+        'COMPLETE'
+      ) {
+        renderMatches();
+
+        renderTotalsComplete(
+          eligible.length
+        );
+
+        if (totalsWorker) {
+          totalsWorker.terminate();
+          totalsWorker = null;
+        }
+      }
+    };
+
+  totalsWorker.onerror =
+    error => {
+      renderTotalsError(
+        error?.message ||
+        'Worker failure'
+      );
+    };
+
+  totalsWorker.postMessage({
+    type: 'RUN',
+
+    generation,
+
+    simulations:
+      TOTALS_SIMULATIONS,
+
+    matches:
+      pending
+  });
 }
 
 function renderMatchupLoading() {
@@ -1150,6 +1702,11 @@ async function loadPlayerStats(
 
     renderMatchupData(
       matchupResult.summary
+    );
+
+    startTotalsEngine(
+      matches,
+      generation
     );
 
   } catch (error) {
