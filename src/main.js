@@ -16,7 +16,7 @@ let totalsWorker = null;
 
 const totalsCache = new Map();
 
-const TOTALS_SIMULATIONS = 50000;
+const TOTALS_SIMULATIONS = 40000;
 
 
 app.innerHTML = `
@@ -26,7 +26,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.4.0</div>
+        <div class="version">ATP + WTA · v0.4.1</div>
       </div>
 
       <button
@@ -278,8 +278,8 @@ app.innerHTML = `
           </div>
 
           <div>
-            <span>MC / MATCH</span>
-            <strong>50K</strong>
+            <span>SIM / MATCH</span>
+            <strong>100K</strong>
           </div>
 
           <div>
@@ -830,6 +830,16 @@ function totalsPanel(match) {
           </strong>
         </span>
 
+        <span class="consensus-cell ${
+          (totals.diagnostics?.consensusStatus || '')
+            .toLowerCase()
+        }">
+          CONSENSUS
+          <strong>
+            ${totals.diagnostics?.consensusStatus || '—'}
+          </strong>
+        </span>
+
       </div>
 
       <div class="totals-foot">
@@ -846,9 +856,17 @@ function totalsPanel(match) {
 
       </div>
 
-      <div class="totals-no-pick">
-        DISTRIBUCIÓN DEL MODELO
-        · TODAVÍA SIN PLAY/LEAN/PASS
+      <div class="totals-no-pick ${
+        (totals.diagnostics?.consensusStatus || '')
+          .toLowerCase()
+      }">
+        ${
+          totals.diagnostics?.consensusStatus === 'UNSTABLE'
+            ? 'CONSENSUS INESTABLE · PASS AUTOMÁTICO'
+            : totals.diagnostics?.consensusStatus === 'WATCH'
+              ? 'CONSENSUS EN OBSERVACIÓN · SIN PICK TODAVÍA'
+              : 'CONSENSUS ESTABLE · LISTO PARA MARKET ENGINE'
+        }
       </div>
 
     </div>
@@ -1173,7 +1191,7 @@ function renderTotalsEngineStart({
     '#totalsEngineTitle'
   ).textContent =
     pending > 0
-      ? 'Monte Carlo procesando...'
+      ? 'Ensamble procesando...'
       : 'Distribuciones en caché';
 
   document.querySelector(
@@ -1258,7 +1276,7 @@ function renderTotalsComplete(eligible) {
   document.querySelector(
     '#totalsEngineProgress'
   ).textContent =
-    `${eligible} partidos modelados · Markov + Monte Carlo`;
+    `${eligible} partidos modelados · Ensemble · 3 modelos`;
 }
 
 function renderTotalsError(message) {

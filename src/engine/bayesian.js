@@ -1,5 +1,6 @@
 import {
-  simulateMatchTotals
+  simulateMatchTotals,
+  inferBestOf
 } from './montecarlo.js';
 
 import {
@@ -90,105 +91,12 @@ function normalRandom(rng) {
   );
 }
 
-function gammaRandom(
-  shape,
-  rng
-) {
-  if (shape < 1) {
-    return (
-      gammaRandom(
-        shape + 1,
-        rng
-      ) *
-      Math.pow(
-        rng(),
-        1 / shape
-      )
-    );
-  }
-
-  const d =
-    shape -
-    1 / 3;
-
-  const c =
-    1 /
-    Math.sqrt(
-      9 * d
-    );
-
-  while (true) {
-    const x =
-      normalRandom(rng);
-
-    let v =
-      1 +
-      c * x;
-
-    if (v <= 0) {
-      continue;
-    }
-
-    v =
-      v * v * v;
-
-    const u =
-      rng();
-
-    if (
-      u <
-      1 -
-      0.0331 *
-      x * x *
-      x * x
-    ) {
-      return d * v;
-    }
-
-    if (
-      Math.log(u) <
-      0.5 * x * x +
-      d *
-      (
-        1 -
-        v +
-        Math.log(v)
-      )
-    ) {
-      return d * v;
-    }
-  }
-}
-
-function betaRandom(
-  alpha,
-  beta,
-  rng
-) {
-  const x =
-    gammaRandom(
-      alpha,
-      rng
-    );
-
-  const y =
-    gammaRandom(
-      beta,
-      rng
-    );
-
-  return (
-    x /
-    (x + y)
-  );
-}
-
 function addEvidence(
   posterior,
   wins,
   total,
   nominalWeight,
-  maxEffective = 400
+  maxEffective
 ) {
   const n =
     Number(total || 0);
@@ -198,7 +106,8 @@ function addEvidence(
 
   if (
     n <= 0 ||
-    w < 0
+    w < 0 ||
+    w > n
   ) {
     return;
   }
@@ -213,35 +122,54 @@ function addEvidence(
     w * scale;
 
   posterior.beta +=
-    Math.max(
-      0,
-      n - w
+    (
+      n -
+      w
     ) * scale;
 }
 
 function posteriorForServer(
   profile,
   opponentProfile,
-  baseline
+  baselineServe,
+  matchupServe
 ) {
-  const base =
-    clamp(baseline);
+  const baseline =
+    clamp(
+      baselineServe
+    );
+
+  const anchor =
+    clamp(
+      matchupServe
+    );
 
   /*
-   * Prior suficientemente fuerte para
-   * evitar que muestras pequeñas dominen.
+   * El Matchup Engine ya hizo
+   * shrink contra superficie.
+   *
+   * Bayesian parte de ese estimador
+   * y añade incertidumbre; no intenta
+   * destruirlo y empezar de cero.
    */
+  const priorMean =
+    clamp(
+      0.72 * anchor +
+      0.28 * baseline
+    );
+
   const priorStrength =
-    180;
+    260;
 
   const posterior = {
     alpha:
-      base *
+      priorMean *
       priorStrength,
 
     beta:
       (
-        1 - base
+        1 -
+        priorMean
       ) *
       priorStrength
   };
@@ -249,43 +177,56 @@ function posteriorForServer(
   const own =
     profile?.raw;
 
-  const opp =
+  const opponent =
     opponentProfile?.raw;
 
+  /*
+   * Evidencia individual deliberadamente
+   * limitada para evitar overfit.
+   */
   if (own) {
     addEvidence(
       posterior,
       own.servePointsWon,
       own.servePoints,
-      0.22,
-      400
+      0.10,
+      250
     );
   }
 
   /*
-   * Si el rival gana X puntos
-   * al resto, el servidor gana
-   * el complemento.
+   * Return del rival:
+   *
+   * P(server gana punto)
+   * =
+   * 1 - RPW rival
    */
-  if (opp) {
-    const serverWins =
+  if (opponent) {
+    const returnPoints =
       Number(
-        opp.returnPoints || 0
-      ) -
+        opponent.returnPoints || 0
+      );
+
+    const returnWon =
       Number(
-        opp.returnPointsWon || 0
+        opponent.returnPointsWon || 0
       );
 
     addEvidence(
       posterior,
-      serverWins,
-      opp.returnPoints,
-      0.18,
-      350
+      returnPoints -
+      returnWon,
+      returnPoints,
+      0.08,
+      220
     );
   }
 
-  return posterior;
+  return {
+    ...posterior,
+    anchor,
+    baseline
+  };
 }
 
 function posteriorSummary(
@@ -299,7 +240,10 @@ function posteriorSummary(
 
   const mean =
     a /
-    (a + b);
+    (
+      a +
+      b
+    );
 
   const variance =
     (
@@ -324,7 +268,6 @@ function posteriorSummary(
 
   return {
     mean,
-
     sd,
 
     low90:
@@ -341,21 +284,54 @@ function posteriorSummary(
   };
 }
 
+function robustMean(
+  values,
+  trim = 0.10
+) {
+  const clean =
+    values
+      .filter(Number.isFinite)
+      .sort(
+        (a, b) =>
+          a - b
+      );
+
+  if (!clean.length) {
+    return 0;
+  }
+
+  const cut =
+    Math.floor(
+      clean.length *
+      trim
+    );
+
+  const trimmed =
+    clean.slice(
+      cut,
+      clean.length - cut
+    );
+
+  const target =
+    trimmed.length
+      ? trimmed
+      : clean;
+
+  return (
+    target.reduce(
+      (sum, value) =>
+        sum + value,
+      0
+    ) /
+    target.length
+  );
+}
+
 function cloneWithServe(
   match,
   serveA,
   serveB
 ) {
-  const holdA =
-    holdFromPointProbability(
-      serveA
-    );
-
-  const holdB =
-    holdFromPointProbability(
-      serveB
-    );
-
   return {
     ...match,
 
@@ -369,7 +345,9 @@ function cloneWithServe(
           serveA * 100,
 
         holdPct:
-          holdA * 100
+          holdFromPointProbability(
+            serveA
+          ) * 100
       },
 
       playerB: {
@@ -379,7 +357,9 @@ function cloneWithServe(
           serveB * 100,
 
         holdPct:
-          holdB * 100
+          holdFromPointProbability(
+            serveB
+          ) * 100
       }
     }
   };
@@ -389,14 +369,20 @@ function overAtLine(
   result,
   line
 ) {
+  const rows =
+    [...result.curve]
+      .sort(
+        (a, b) =>
+          a.line - b.line
+      );
+
   const exact =
-    result.curve.find(
+    rows.find(
       row =>
         Math.abs(
           row.line -
           line
-        ) <
-        0.001
+        ) < 0.001
     );
 
   if (exact) {
@@ -406,55 +392,93 @@ function overAtLine(
     );
   }
 
-  const ordered =
-    [...result.curve]
-      .sort(
-        (a, b) =>
-          a.line -
-          b.line
-      );
-
   if (
-    line <
-    ordered[0].line
+    line <=
+    rows[0].line
   ) {
-    return 1;
+    return (
+      rows[0].overPct /
+      100
+    );
   }
 
   if (
-    line >
-    ordered[
-      ordered.length - 1
+    line >=
+    rows[
+      rows.length - 1
     ].line
   ) {
-    return 0;
+    return (
+      rows[
+        rows.length - 1
+      ].overPct /
+      100
+    );
   }
 
-  const nearest =
-    ordered.reduce(
-      (best, row) =>
-        Math.abs(
-          row.line -
-          line
-        ) <
-        Math.abs(
-          best.line -
-          line
-        )
-          ? row
-          : best
-    );
+  for (
+    let i = 0;
+    i < rows.length - 1;
+    i++
+  ) {
+    const left =
+      rows[i];
 
+    const right =
+      rows[i + 1];
+
+    if (
+      line >
+      left.line &&
+      line <
+      right.line
+    ) {
+      const ratio =
+        (
+          line -
+          left.line
+        ) /
+        (
+          right.line -
+          left.line
+        );
+
+      return (
+        left.overPct +
+        ratio *
+        (
+          right.overPct -
+          left.overPct
+        )
+      ) / 100;
+    }
+  }
+
+  return 0.5;
+}
+
+function round1(value) {
   return (
-    nearest.overPct /
-    100
+    Math.round(
+      value *
+      10
+    ) / 10
+  );
+}
+
+function round2(value) {
+  return (
+    Math.round(
+      value *
+      100
+    ) / 100
   );
 }
 
 export function simulateBayesianTotals(
   match,
   targetLines,
-  requestedSimulations = 30000
+  requestedSimulations = 40000
 ) {
   const baseline =
     Number(
@@ -463,18 +487,34 @@ export function simulateBayesianTotals(
         ?.servePointPct
     ) / 100;
 
+  const anchorA =
+    Number(
+      match.matchup
+        ?.playerA
+        ?.servePointPct
+    ) / 100;
+
+  const anchorB =
+    Number(
+      match.matchup
+        ?.playerB
+        ?.servePointPct
+    ) / 100;
+
   const posteriorA =
     posteriorForServer(
       match.playerA.profile,
       match.playerB.profile,
-      baseline
+      baseline,
+      anchorA
     );
 
   const posteriorB =
     posteriorForServer(
       match.playerB.profile,
       match.playerA.profile,
-      baseline
+      baseline,
+      anchorB
     );
 
   const summaryA =
@@ -487,79 +527,198 @@ export function simulateBayesianTotals(
       posteriorB
     );
 
-  const batches = 15;
+  /*
+   * Antes eran 15 escenarios.
+   * Ahora usamos 80.
+   */
+  const scenarios =
+    80;
 
-  const simsPerBatch =
+  const simsPerScenario =
     Math.max(
-      1000,
+      250,
       Math.floor(
         requestedSimulations /
-        batches
+        scenarios
       )
     );
 
   const actualSimulations =
-    simsPerBatch *
-    batches;
+    scenarios *
+    simsPerScenario;
 
   const rng =
     mulberry32(
       hashString(
         [
           match.id,
-          'BAYES',
-          posteriorA.alpha,
-          posteriorA.beta,
-          posteriorB.alpha,
-          posteriorB.beta
+          'BAYES-STABLE-041',
+          posteriorA.alpha.toFixed(5),
+          posteriorA.beta.toFixed(5),
+          posteriorB.alpha.toFixed(5),
+          posteriorB.beta.toFixed(5)
         ].join('|')
       )
     );
 
-  let expectedGames = 0;
-  let expectedSets = 0;
-  let decidingSet = 0;
-  let straightSets = 0;
-  let tiebreak = 0;
+  /*
+   * Correlación positiva:
+   * parte de la incertidumbre es
+   * compartida por superficie/cancha.
+   */
+  const rho =
+    0.60;
 
-  let secondMoment = 0;
+  const independentScale =
+    Math.sqrt(
+      1 -
+      rho * rho
+    );
 
-  const curveAccumulator =
+  /*
+   * No usamos el 100% de la desviación
+   * posterior como volatilidad diaria.
+   */
+  const uncertaintyScale =
+    0.70;
+
+  const courtSd =
+    0.0035;
+
+  const expectedGamesValues = [];
+  const expectedSetsValues = [];
+  const decidingValues = [];
+  const straightValues = [];
+  const tiebreakValues = [];
+  const expectedTbValues = [];
+  const secondMoments = [];
+  const medians = [];
+
+  const lineSamples =
     new Map(
       targetLines.map(
         line => [
           line,
-          0
+          []
         ]
       )
     );
 
+  const sampledServeA = [];
+  const sampledServeB = [];
+
   for (
-    let batch = 0;
-    batch < batches;
-    batch++
+    let scenario = 0;
+    scenario < scenarios;
+    scenario++
   ) {
+    const common =
+      normalRandom(
+        rng
+      );
+
+    const individualA =
+      normalRandom(
+        rng
+      );
+
+    const individualB =
+      normalRandom(
+        rng
+      );
+
+    const courtShift =
+      normalRandom(
+        rng
+      ) *
+      courtSd;
+
+    const zA =
+      rho *
+      common +
+      independentScale *
+      individualA;
+
+    const zB =
+      rho *
+      common +
+      independentScale *
+      individualB;
+
+    /*
+     * Límites de seguridad.
+     * Evitamos que una muestra pequeña
+     * genere un servidor ficticio extremo.
+     */
+    const lowA =
+      Math.max(
+        0.50,
+        Math.min(
+          summaryA.low90,
+          summaryA.mean -
+          0.025
+        )
+      );
+
+    const highA =
+      Math.min(
+        0.78,
+        Math.max(
+          summaryA.high90,
+          summaryA.mean +
+          0.025
+        )
+      );
+
+    const lowB =
+      Math.max(
+        0.50,
+        Math.min(
+          summaryB.low90,
+          summaryB.mean -
+          0.025
+        )
+      );
+
+    const highB =
+      Math.min(
+        0.78,
+        Math.max(
+          summaryB.high90,
+          summaryB.mean +
+          0.025
+        )
+      );
+
     const serveA =
       clamp(
-        betaRandom(
-          posteriorA.alpha,
-          posteriorA.beta,
-          rng
-        ),
-        0.45,
-        0.82
+        summaryA.mean +
+        summaryA.sd *
+        uncertaintyScale *
+        zA +
+        courtShift,
+        lowA,
+        highA
       );
 
     const serveB =
       clamp(
-        betaRandom(
-          posteriorB.alpha,
-          posteriorB.beta,
-          rng
-        ),
-        0.45,
-        0.82
+        summaryB.mean +
+        summaryB.sd *
+        uncertaintyScale *
+        zB +
+        courtShift,
+        lowB,
+        highB
       );
+
+    sampledServeA.push(
+      serveA
+    );
+
+    sampledServeB.push(
+      serveB
+    );
 
     const sampledMatch =
       cloneWithServe(
@@ -571,73 +730,102 @@ export function simulateBayesianTotals(
     const result =
       simulateMatchTotals(
         sampledMatch,
-        simsPerBatch
+        simsPerScenario
       );
 
-    expectedGames +=
-      result.expectedGames;
+    expectedGamesValues.push(
+      result.expectedGames
+    );
 
-    expectedSets +=
-      result.expectedSets;
+    expectedSetsValues.push(
+      result.expectedSets
+    );
 
-    decidingSet +=
-      result.decidingSetPct;
+    decidingValues.push(
+      result.decidingSetPct
+    );
 
-    straightSets +=
-      result.straightSetsPct;
+    straightValues.push(
+      result.straightSetsPct
+    );
 
-    tiebreak +=
-      result.tiebreakPct;
+    tiebreakValues.push(
+      result.tiebreakPct
+    );
 
-    secondMoment +=
-      (
-        result.sdGames *
-        result.sdGames
-      ) +
-      (
-        result.expectedGames *
-        result.expectedGames
-      );
+    expectedTbValues.push(
+      result.expectedTiebreaks
+    );
+
+    medians.push(
+      result.medianGames
+    );
+
+    secondMoments.push(
+      result.sdGames ** 2 +
+      result.expectedGames ** 2
+    );
 
     for (
       const line
       of targetLines
     ) {
-      curveAccumulator.set(
-        line,
-        curveAccumulator.get(line) +
-        overAtLine(
-          result,
-          line
-        )
-      );
+      lineSamples
+        .get(line)
+        .push(
+          overAtLine(
+            result,
+            line
+          )
+        );
     }
   }
 
-  expectedGames /=
-    batches;
+  /*
+   * Trimmed mean:
+   * escenarios paramétricos extremos
+   * no dominan todo el modelo.
+   */
+  const expectedGames =
+    robustMean(
+      expectedGamesValues
+    );
 
-  expectedSets /=
-    batches;
+  const expectedSets =
+    robustMean(
+      expectedSetsValues
+    );
 
-  decidingSet /=
-    batches;
+  const decidingSetPct =
+    robustMean(
+      decidingValues
+    );
 
-  straightSets /=
-    batches;
+  const straightSetsPct =
+    robustMean(
+      straightValues
+    );
 
-  tiebreak /=
-    batches;
+  const tiebreakPct =
+    robustMean(
+      tiebreakValues
+    );
 
-  secondMoment /=
-    batches;
+  const expectedTiebreaks =
+    robustMean(
+      expectedTbValues
+    );
+
+  const secondMoment =
+    robustMean(
+      secondMoments
+    );
 
   const variance =
     Math.max(
       0,
       secondMoment -
-      expectedGames *
-      expectedGames
+      expectedGames ** 2
     );
 
   const curve =
@@ -645,116 +833,174 @@ export function simulateBayesianTotals(
       line => {
 
         const over =
-          curveAccumulator.get(line) /
-          batches;
+          robustMean(
+            lineSamples.get(
+              line
+            )
+          );
 
         return {
           line,
 
           overPct:
-            Math.round(
-              over *
-              1000
-            ) / 10,
+            round1(
+              over * 100
+            ),
 
           underPct:
-            Math.round(
+            round1(
               (
                 1 -
                 over
-              ) *
-              1000
-            ) / 10
+              ) * 100
+            )
         };
       }
     );
 
+  const serveScenarioA =
+    robustMean(
+      sampledServeA
+    );
+
+  const serveScenarioB =
+    robustMean(
+      sampledServeB
+    );
+
   return {
     version:
-      'BAYES-0.4.0',
+      'BAYES-0.4.1',
 
     mode:
-      'BAYESIAN',
+      'BAYESIAN_STABLE',
 
     simulations:
       actualSimulations,
 
+    scenarios,
+
     bestOf:
-      match.matchup
-        ?.bestOf,
+      inferBestOf(
+        match
+      ),
 
     expectedGames:
-      Math.round(
-        expectedGames *
-        100
-      ) / 100,
-
-    medianGames:
-      Math.round(
+      round2(
         expectedGames
       ),
 
-    sdGames:
+    medianGames:
       Math.round(
+        robustMean(
+          medians
+        )
+      ),
+
+    sdGames:
+      round2(
         Math.sqrt(
           variance
-        ) *
-        100
-      ) / 100,
+        )
+      ),
 
     expectedSets:
-      Math.round(
-        expectedSets *
-        100
-      ) / 100,
+      round2(
+        expectedSets
+      ),
 
     decidingSetPct:
-      Math.round(
-        decidingSet *
-        10
-      ) / 10,
+      round1(
+        decidingSetPct
+      ),
 
     straightSetsPct:
-      Math.round(
-        straightSets *
-        10
-      ) / 10,
+      round1(
+        straightSetsPct
+      ),
 
     tiebreakPct:
-      Math.round(
-        tiebreak *
-        10
-      ) / 10,
+      round1(
+        tiebreakPct
+      ),
+
+    expectedTiebreaks:
+      round2(
+        expectedTiebreaks
+      ),
+
+    maxProbabilitySePct:
+      round2(
+        0.5 /
+        Math.sqrt(
+          actualSimulations
+        ) *
+        100
+      ),
 
     curve,
 
     posterior: {
       playerA: {
+        anchorPct:
+          round1(
+            anchorA * 100
+          ),
+
         meanPct:
-          summaryA.mean *
-          100,
+          round1(
+            summaryA.mean *
+            100
+          ),
+
+        scenarioMeanPct:
+          round1(
+            serveScenarioA *
+            100
+          ),
 
         low90Pct:
-          summaryA.low90 *
-          100,
+          round1(
+            summaryA.low90 *
+            100
+          ),
 
         high90Pct:
-          summaryA.high90 *
-          100
+          round1(
+            summaryA.high90 *
+            100
+          )
       },
 
       playerB: {
+        anchorPct:
+          round1(
+            anchorB * 100
+          ),
+
         meanPct:
-          summaryB.mean *
-          100,
+          round1(
+            summaryB.mean *
+            100
+          ),
+
+        scenarioMeanPct:
+          round1(
+            serveScenarioB *
+            100
+          ),
 
         low90Pct:
-          summaryB.low90 *
-          100,
+          round1(
+            summaryB.low90 *
+            100
+          ),
 
         high90Pct:
-          summaryB.high90 *
-          100
+          round1(
+            summaryB.high90 *
+            100
+          )
       }
     }
   };

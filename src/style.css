@@ -1348,3 +1348,46 @@ h1 {
       repeat(3, 1fr);
   }
 }
+
+/* ENSEMBLE STABILIZATION v0.4.1 */
+
+.ensemble-models {
+  grid-template-columns:
+    repeat(6, 1fr);
+}
+
+.consensus-cell strong {
+  font-size: 8px;
+}
+
+.consensus-cell.stable strong {
+  color: #63efa2;
+}
+
+.consensus-cell.watch strong {
+  color: #e9cf73;
+}
+
+.consensus-cell.unstable strong {
+  color: #ff9d75;
+}
+
+.totals-no-pick.stable {
+  color: #72dca0;
+}
+
+.totals-no-pick.watch {
+  color: #d9c06c;
+}
+
+.totals-no-pick.unstable {
+  color: #f19a75;
+  background: #1b120d;
+}
+
+@media (max-width: 400px) {
+  .ensemble-models {
+    grid-template-columns:
+      repeat(3, 1fr);
+  }
+}

@@ -10,9 +10,9 @@ import {
   simulateEloTotals
 } from './eloLength.js';
 
-const WEIGHTS = {
-  structural: 0.40,
-  bayesian: 0.40,
+const BASE_WEIGHTS = {
+  structural: 0.45,
+  bayesian: 0.35,
   elo: 0.20
 };
 
@@ -30,29 +30,125 @@ function clamp(
   );
 }
 
+function round1(value) {
+  return (
+    Math.round(
+      value *
+      10
+    ) / 10
+  );
+}
+
+function round2(value) {
+  return (
+    Math.round(
+      value *
+      100
+    ) / 100
+  );
+}
+
 function probabilityAt(
   result,
   line
 ) {
-  const row =
-    result.curve.find(
-      item =>
-        Math.abs(
-          item.line -
-          line
-        ) <
-        0.001
-    );
+  const rows =
+    [...result.curve]
+      .sort(
+        (a, b) =>
+          a.line -
+          b.line
+      );
 
-  if (!row) {
+  if (!rows.length) {
     return 0.5;
   }
 
-  return (
-    Number(
-      row.overPct
-    ) / 100
-  );
+  const exact =
+    rows.find(
+      row =>
+        Math.abs(
+          row.line -
+          line
+        ) < 0.001
+    );
+
+  if (exact) {
+    return (
+      Number(
+        exact.overPct
+      ) / 100
+    );
+  }
+
+  if (
+    line <=
+    rows[0].line
+  ) {
+    return (
+      Number(
+        rows[0].overPct
+      ) / 100
+    );
+  }
+
+  if (
+    line >=
+    rows[
+      rows.length - 1
+    ].line
+  ) {
+    return (
+      Number(
+        rows[
+          rows.length - 1
+        ].overPct
+      ) / 100
+    );
+  }
+
+  for (
+    let i = 0;
+    i < rows.length - 1;
+    i++
+  ) {
+    const left =
+      rows[i];
+
+    const right =
+      rows[i + 1];
+
+    if (
+      line >
+      left.line &&
+      line <
+      right.line
+    ) {
+      const ratio =
+        (
+          line -
+          left.line
+        ) /
+        (
+          right.line -
+          left.line
+        );
+
+      return (
+        (
+          left.overPct +
+          ratio *
+          (
+            right.overPct -
+            left.overPct
+          )
+        ) /
+        100
+      );
+    }
+  }
+
+  return 0.5;
 }
 
 function qualityScore(match) {
@@ -134,31 +230,158 @@ function qualityScore(match) {
   );
 }
 
+function median3(
+  a,
+  b,
+  c
+) {
+  return [
+    a,
+    b,
+    c
+  ]
+    .sort(
+      (x, y) =>
+        x - y
+    )[1];
+}
+
+function robustWeights(
+  structural,
+  bayesian,
+  elo
+) {
+  const expected = {
+    structural:
+      structural.expectedGames,
+
+    bayesian:
+      bayesian.expectedGames,
+
+    elo:
+      elo.expectedGames
+  };
+
+  /*
+   * El centro robusto con 3 modelos
+   * es la mediana.
+   */
+  const center =
+    median3(
+      expected.structural,
+      expected.bayesian,
+      expected.elo
+    );
+
+  const scale =
+    2.75;
+
+  const raw = {};
+
+  for (
+    const key
+    of Object.keys(
+      BASE_WEIGHTS
+    )
+  ) {
+    const deviation =
+      Math.abs(
+        expected[key] -
+        center
+      );
+
+    /*
+     * Una desviación de 10 games
+     * prácticamente elimina el modelo
+     * de esa predicción.
+     */
+    const robustFactor =
+      Math.max(
+        0.05,
+        Math.exp(
+          -0.5 *
+          Math.pow(
+            deviation /
+            scale,
+            2
+          )
+        )
+      );
+
+    raw[key] =
+      BASE_WEIGHTS[key] *
+      robustFactor;
+  }
+
+  const total =
+    raw.structural +
+    raw.bayesian +
+    raw.elo;
+
+  return {
+    structural:
+      raw.structural /
+      total,
+
+    bayesian:
+      raw.bayesian /
+      total,
+
+    elo:
+      raw.elo /
+      total,
+
+    center
+  };
+}
+
 function weightedMetric(
   structural,
   bayesian,
   elo,
+  weights,
   key
 ) {
   return (
-    WEIGHTS.structural *
+    weights.structural *
     Number(
       structural[key] || 0
     ) +
-    WEIGHTS.bayesian *
+    weights.bayesian *
     Number(
       bayesian[key] || 0
     ) +
-    WEIGHTS.elo *
+    weights.elo *
     Number(
       elo[key] || 0
     )
   );
 }
 
+function consensusStatus(
+  expectedRange,
+  probabilityDisagreement
+) {
+  if (
+    expectedRange <= 3.0 &&
+    probabilityDisagreement <= 0.12
+  ) {
+    return 'STABLE';
+  }
+
+  if (
+    expectedRange <= 5.0 &&
+    probabilityDisagreement <= 0.20
+  ) {
+    return 'WATCH';
+  }
+
+  return 'UNSTABLE';
+}
+
 export function simulateEnsembleTotals(
   match,
-  structuralSimulations = 30000
+  structuralSimulations = 40000
 ) {
   const structural =
     simulateMatchTotals(
@@ -176,7 +399,7 @@ export function simulateEnsembleTotals(
     simulateBayesianTotals(
       match,
       targetLines,
-      30000
+      40000
     );
 
   const elo =
@@ -185,14 +408,33 @@ export function simulateEnsembleTotals(
       20000
     );
 
+  const weights =
+    robustWeights(
+      structural,
+      bayesian,
+      elo
+    );
+
   const quality =
     qualityScore(
       match
     );
 
-  let disagreementTotal = 0;
+  const expectedValues = [
+    structural.expectedGames,
+    bayesian.expectedGames,
+    elo.expectedGames
+  ];
 
-  const curve =
+  const expectedRange =
+    Math.max(
+      ...expectedValues
+    ) -
+    Math.min(
+      ...expectedValues
+    );
+
+  const rawRows =
     targetLines.map(
       line => {
 
@@ -214,14 +456,6 @@ export function simulateEnsembleTotals(
             line
           );
 
-        const raw =
-          WEIGHTS.structural *
-          pMarkov +
-          WEIGHTS.bayesian *
-          pBayes +
-          WEIGHTS.elo *
-          pElo;
-
         const highest =
           Math.max(
             pMarkov,
@@ -240,81 +474,130 @@ export function simulateEnsembleTotals(
           highest -
           lowest;
 
-        disagreementTotal +=
-          disagreement;
+        const weighted =
+          weights.structural *
+          pMarkov +
+          weights.bayesian *
+          pBayes +
+          weights.elo *
+          pElo;
 
-        /*
-         * Si los modelos discrepan,
-         * acercamos la probabilidad a 50%.
-         * Nada de inflar edges dudosos.
-         */
+        return {
+          line,
+          pMarkov,
+          pBayes,
+          pElo,
+          disagreement,
+          weighted
+        };
+      }
+    );
+
+  const meanDisagreement =
+    rawRows.length
+      ? (
+          rawRows.reduce(
+            (sum, row) =>
+              sum +
+              row.disagreement,
+            0
+          ) /
+          rawRows.length
+        )
+      : 0;
+
+  const consensus =
+    consensusStatus(
+      expectedRange,
+      meanDisagreement
+    );
+
+  const consensusMultiplier =
+    consensus === 'STABLE'
+      ? 1.00
+      : consensus === 'WATCH'
+        ? 0.85
+        : 0.55;
+
+  const curve =
+    rawRows.map(
+      row => {
+
         const disagreementPenalty =
           Math.min(
-            0.30,
-            disagreement *
-            0.85
+            0.35,
+            row.disagreement *
+            0.90
           );
 
+        /*
+         * El consenso final se acerca
+         * deliberadamente a 50%
+         * cuando hay poca calidad o
+         * demasiada discrepancia.
+         */
         const confidenceMultiplier =
           quality *
           (
             1 -
             disagreementPenalty
-          );
+          ) *
+          consensusMultiplier;
 
         const finalOver =
           clamp(
             0.5 +
             (
-              raw -
+              row.weighted -
               0.5
             ) *
             confidenceMultiplier
           );
 
         return {
-          line,
+          line:
+            row.line,
 
           overPct:
-            Math.round(
+            round1(
               finalOver *
-              1000
-            ) / 10,
+              100
+            ),
 
           underPct:
-            Math.round(
+            round1(
               (
                 1 -
                 finalOver
               ) *
-              1000
-            ) / 10,
+              100
+            ),
 
           models: {
             markovPct:
-              Math.round(
-                pMarkov *
-                1000
-              ) / 10,
+              round1(
+                row.pMarkov *
+                100
+              ),
 
             bayesianPct:
-              Math.round(
-                pBayes *
-                1000
-              ) / 10,
+              round1(
+                row.pBayes *
+                100
+              ),
 
             eloPct:
-              Math.round(
-                pElo *
-                1000
-              ) / 10
+              round1(
+                row.pElo *
+                100
+              )
           },
 
           disagreementPct:
-            Math.round(
-              disagreement *
-              1000
-            ) / 10
+            round1(
+              row.disagreement *
+              100
+            )
         };
       }
     );
@@ -324,38 +607,35 @@ export function simulateEnsembleTotals(
       structural,
       bayesian,
       elo,
+      weights,
       'expectedGames'
     );
 
   const variance =
-    WEIGHTS.structural *
+    weights.structural *
     (
       structural.sdGames ** 2 +
       structural.expectedGames ** 2
     ) +
-    WEIGHTS.bayesian *
+    weights.bayesian *
     (
       bayesian.sdGames ** 2 +
       bayesian.expectedGames ** 2
     ) +
-    WEIGHTS.elo *
+    weights.elo *
     (
       elo.sdGames ** 2 +
       elo.expectedGames ** 2
     ) -
     expectedGames ** 2;
 
-  const meanDisagreement =
-    curve.length
-      ? (
-          disagreementTotal /
-          curve.length
-        )
-      : 0;
+  const marketEligible =
+    consensus !== 'UNSTABLE' &&
+    quality >= 0.72;
 
   return {
     version:
-      'ENSEMBLE-0.4.0',
+      'ENSEMBLE-0.4.1',
 
     mode:
       'ENSEMBLE',
@@ -369,10 +649,9 @@ export function simulateEnsembleTotals(
       structural.bestOf,
 
     expectedGames:
-      Math.round(
-        expectedGames *
-        100
-      ) / 100,
+      round2(
+        expectedGames
+      ),
 
     medianGames:
       Math.round(
@@ -380,91 +659,123 @@ export function simulateEnsembleTotals(
           structural,
           bayesian,
           elo,
+          weights,
           'medianGames'
         )
       ),
 
     sdGames:
-      Math.round(
+      round2(
         Math.sqrt(
           Math.max(
             0,
             variance
           )
-        ) *
-        100
-      ) / 100,
+        )
+      ),
 
     expectedSets:
-      Math.round(
+      round2(
         weightedMetric(
           structural,
           bayesian,
           elo,
+          weights,
           'expectedSets'
-        ) *
-        100
-      ) / 100,
+        )
+      ),
 
     decidingSetPct:
-      Math.round(
+      round1(
         weightedMetric(
           structural,
           bayesian,
           elo,
+          weights,
           'decidingSetPct'
-        ) *
-        10
-      ) / 10,
+        )
+      ),
 
     straightSetsPct:
-      Math.round(
+      round1(
         weightedMetric(
           structural,
           bayesian,
           elo,
+          weights,
           'straightSetsPct'
-        ) *
-        10
-      ) / 10,
+        )
+      ),
 
     tiebreakPct:
-      Math.round(
+      round1(
         weightedMetric(
           structural,
           bayesian,
           elo,
+          weights,
           'tiebreakPct'
-        ) *
-        10
-      ) / 10,
+        )
+      ),
 
     expectedTiebreaks:
-      structural.expectedTiebreaks,
+      round2(
+        weightedMetric(
+          structural,
+          bayesian,
+          elo,
+          weights,
+          'expectedTiebreaks'
+        )
+      ),
 
     maxProbabilitySePct:
-      Math.max(
-        structural.maxProbabilitySePct || 0,
-        0.30
-      ),
+      0.25,
 
     curve,
 
-    weights:
-      WEIGHTS,
+    weights: {
+      structural:
+        round1(
+          weights.structural *
+          100
+        ),
+
+      bayesian:
+        round1(
+          weights.bayesian *
+          100
+        ),
+
+      elo:
+        round1(
+          weights.elo *
+          100
+        )
+    },
 
     diagnostics: {
       qualityPct:
-        Math.round(
+        round1(
           quality *
-          1000
-        ) / 10,
+          100
+        ),
 
       disagreementPct:
-        Math.round(
+        round1(
           meanDisagreement *
-          1000
-        ) / 10
+          100
+        ),
+
+      expectedRange:
+        round2(
+          expectedRange
+        ),
+
+      consensusStatus:
+        consensus,
+
+      marketEligible
     },
 
     models: {
@@ -473,7 +784,13 @@ export function simulateEnsembleTotals(
           structural.expectedGames,
 
         tiebreakPct:
-          structural.tiebreakPct
+          structural.tiebreakPct,
+
+        weightPct:
+          round1(
+            weights.structural *
+            100
+          )
       },
 
       bayesian: {
@@ -482,6 +799,12 @@ export function simulateEnsembleTotals(
 
         tiebreakPct:
           bayesian.tiebreakPct,
+
+        weightPct:
+          round1(
+            weights.bayesian *
+            100
+          ),
 
         posterior:
           bayesian.posterior
@@ -493,6 +816,12 @@ export function simulateEnsembleTotals(
 
         tiebreakPct:
           elo.tiebreakPct,
+
+        weightPct:
+          round1(
+            weights.elo *
+            100
+          ),
 
         ratings:
           elo.elo
