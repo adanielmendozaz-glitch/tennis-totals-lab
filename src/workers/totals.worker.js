@@ -1,6 +1,6 @@
 import {
-  simulateMatchTotals
-} from '../engine/montecarlo.js';
+  simulateEnsembleTotals
+} from '../engine/ensemble.js';
 
 self.onmessage = event => {
   const {
@@ -28,7 +28,7 @@ self.onmessage = event => {
   ) {
     try {
       const result =
-        simulateMatchTotals(
+        simulateEnsembleTotals(
           match,
           simulations
         );
@@ -58,7 +58,7 @@ self.onmessage = event => {
         total,
         error:
           error?.message ||
-          'MONTE_CARLO_ERROR'
+          'ENSEMBLE_ERROR'
       });
     }
   }

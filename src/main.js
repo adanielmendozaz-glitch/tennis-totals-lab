@@ -26,7 +26,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.3.1</div>
+        <div class="version">ATP + WTA · v0.4.0</div>
       </div>
 
       <button
@@ -692,7 +692,7 @@ function totalsPanel(match) {
 
         <div class="totals-box-head">
           <span>TOTALS ENGINE</span>
-          <strong>50K MC</strong>
+          <strong>80K ENS</strong>
         </div>
 
         <div class="totals-pending">
@@ -726,7 +726,7 @@ function totalsPanel(match) {
         </span>
 
         <strong class="totals-ready-badge">
-          ${(totals.simulations / 1000).toFixed(0)}K MC
+          ${(totals.simulations / 1000).toFixed(0)}K ENS
         </strong>
 
       </div>
@@ -790,6 +790,45 @@ function totalsPanel(match) {
 
           </div>
         `).join('')}
+
+      </div>
+
+      <div class="ensemble-models">
+
+        <span>
+          MARKOV
+          <strong>
+            ${totals.models?.structural?.expectedGames?.toFixed(2) || '—'}
+          </strong>
+        </span>
+
+        <span>
+          BAYES
+          <strong>
+            ${totals.models?.bayesian?.expectedGames?.toFixed(2) || '—'}
+          </strong>
+        </span>
+
+        <span>
+          ELO
+          <strong>
+            ${totals.models?.elo?.expectedGames?.toFixed(2) || '—'}
+          </strong>
+        </span>
+
+        <span>
+          QUALITY
+          <strong>
+            ${totals.diagnostics?.qualityPct?.toFixed(1) || '—'}%
+          </strong>
+        </span>
+
+        <span>
+          DISAG
+          <strong>
+            ${totals.diagnostics?.disagreementPct?.toFixed(1) || '—'} pp
+          </strong>
+        </span>
 
       </div>
 
@@ -1151,7 +1190,7 @@ function renderTotalsEngineStart({
     '#totalsEngineProgress'
   ).textContent =
     pending > 0
-      ? `Procesando ${pending} partidos FULL · 50,000 simulaciones cada uno`
+      ? `Procesando ${pending} partidos FULL · 30K Markov + 30K Bayes + 20K Elo`
       : 'Todos los partidos elegibles ya calculados';
 }
 

@@ -364,6 +364,9 @@ function matchupPlayer(
 function profileComplete(profile) {
   return Boolean(
     profile &&
+    Number(
+      profile.sample || 0
+    ) >= 8 &&
     profile.servePointsWonPct !== null &&
     profile.servePointsWonPct !== undefined &&
     profile.returnPointsWonPct !== null &&

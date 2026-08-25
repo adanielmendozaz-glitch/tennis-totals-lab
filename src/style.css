@@ -1314,3 +1314,37 @@ h1 {
     gap: 3px;
   }
 }
+
+/* MULTI MODEL ENSEMBLE v0.4.0 */
+
+.ensemble-models {
+  display: grid;
+  grid-template-columns:
+    repeat(5, 1fr);
+  gap: 1px;
+  background: #17271e;
+  border-top: 1px solid #17271e;
+}
+
+.ensemble-models span {
+  padding: 8px 5px;
+  background: #09150f;
+  color: #62766b;
+  font-size: 6px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.ensemble-models strong {
+  display: block;
+  margin-top: 3px;
+  color: #dbe9e1;
+  font-size: 9px;
+}
+
+@media (max-width: 400px) {
+  .ensemble-models {
+    grid-template-columns:
+      repeat(3, 1fr);
+  }
+}

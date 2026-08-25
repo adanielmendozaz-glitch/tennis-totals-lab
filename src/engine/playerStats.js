@@ -182,6 +182,257 @@ function addRecord(
     .push(record);
 }
 
+
+function eloState(
+  map,
+  key
+) {
+  if (!map.has(key)) {
+    map.set(
+      key,
+      {
+        rating: 1500,
+        matches: 0
+      }
+    );
+  }
+
+  return map.get(key);
+}
+
+function eloExpected(
+  ratingA,
+  ratingB
+) {
+  return 1 /
+    (
+      1 +
+      Math.pow(
+        10,
+        (
+          ratingB -
+          ratingA
+        ) / 400
+      )
+    );
+}
+
+function updateElo(
+  map,
+  winnerKey,
+  loserKey,
+  baseK = 20
+) {
+  if (
+    !winnerKey ||
+    !loserKey
+  ) {
+    return;
+  }
+
+  const winner =
+    eloState(
+      map,
+      winnerKey
+    );
+
+  const loser =
+    eloState(
+      map,
+      loserKey
+    );
+
+  const expected =
+    eloExpected(
+      winner.rating,
+      loser.rating
+    );
+
+  const early =
+    Math.min(
+      winner.matches,
+      loser.matches
+    ) < 20;
+
+  const k =
+    early
+      ? baseK + 12
+      : baseK;
+
+  const delta =
+    k *
+    (
+      1 -
+      expected
+    );
+
+  winner.rating +=
+    delta;
+
+  loser.rating -=
+    delta;
+
+  winner.matches++;
+  loser.matches++;
+}
+
+function buildElo(rows) {
+  const overall =
+    new Map();
+
+  const surfaces = {
+    HARD: new Map(),
+    CLAY: new Map(),
+    GRASS: new Map(),
+    CARPET: new Map()
+  };
+
+  const ordered =
+    [...rows].sort(
+      (a, b) => {
+
+        const dateDiff =
+          String(
+            a.tourney_date || ''
+          ).localeCompare(
+            String(
+              b.tourney_date || ''
+            )
+          );
+
+        if (dateDiff !== 0) {
+          return dateDiff;
+        }
+
+        return (
+          Number(
+            a.match_num || 0
+          ) -
+          Number(
+            b.match_num || 0
+          )
+        );
+      }
+    );
+
+  for (const row of ordered) {
+
+    const winner =
+      normalizeName(
+        row.winner_name
+      );
+
+    const loser =
+      normalizeName(
+        row.loser_name
+      );
+
+    if (
+      !winner ||
+      !loser
+    ) {
+      continue;
+    }
+
+    updateElo(
+      overall,
+      winner,
+      loser,
+      20
+    );
+
+    const surface =
+      cleanSurface(
+        row.surface
+      );
+
+    if (
+      surfaces[surface]
+    ) {
+      updateElo(
+        surfaces[surface],
+        winner,
+        loser,
+        24
+      );
+    }
+  }
+
+  return {
+    overall,
+    surfaces
+  };
+}
+
+function eloProfile(
+  name,
+  surface,
+  elo
+) {
+  const key =
+    normalizeName(name);
+
+  const overall =
+    elo.overall.get(key) ||
+    {
+      rating: 1500,
+      matches: 0
+    };
+
+  const surfaceState =
+    elo.surfaces?.[surface]
+      ?.get(key) ||
+    {
+      rating: 1500,
+      matches: 0
+    };
+
+  let blended =
+    overall.rating;
+
+  if (
+    surfaceState.matches >= 12
+  ) {
+    blended =
+      0.75 *
+      surfaceState.rating +
+      0.25 *
+      overall.rating;
+
+  } else if (
+    surfaceState.matches >= 5
+  ) {
+    blended =
+      0.55 *
+      surfaceState.rating +
+      0.45 *
+      overall.rating;
+  }
+
+  return {
+    overall:
+      Math.round(
+        overall.rating
+      ),
+
+    surface:
+      Math.round(
+        surfaceState.rating
+      ),
+
+    blended:
+      Math.round(
+        blended
+      ),
+
+    matches:
+      overall.matches,
+
+    surfaceMatches:
+      surfaceState.matches
+  };
+}
+
 function buildIndex(rows) {
   const players =
     new Map();
@@ -248,9 +499,13 @@ function buildIndex(rows) {
     );
   }
 
+  const elo =
+    buildElo(rows);
+
   return {
     players,
-    tournaments
+    tournaments,
+    elo
   };
 }
 
@@ -495,6 +750,18 @@ function aggregate(records) {
   return {
     usableMatches,
 
+    serviceGames,
+    heldGames,
+
+    returnGames,
+    breaks,
+
+    servePoints,
+    servePointsWon,
+
+    returnPoints,
+    returnPointsWon,
+
     hold:
       serviceGames
         ? clamp(
@@ -581,6 +848,13 @@ function profile(
         r.rank !== null
     )?.rank ?? null;
 
+  const rating =
+    eloProfile(
+      name,
+      surface,
+      index.elo
+    );
+
   return {
     name,
 
@@ -625,6 +899,47 @@ function profile(
     last10Losses:
       last10.length -
       wins,
+
+    eloRating:
+      rating.overall,
+
+    surfaceEloRating:
+      rating.surface,
+
+    ratingBlend:
+      rating.blended,
+
+    eloMatches:
+      rating.matches,
+
+    surfaceEloMatches:
+      rating.surfaceMatches,
+
+    raw: {
+      serviceGames:
+        agg.serviceGames,
+
+      heldGames:
+        agg.heldGames,
+
+      returnGames:
+        agg.returnGames,
+
+      breaks:
+        agg.breaks,
+
+      servePoints:
+        agg.servePoints,
+
+      servePointsWon:
+        agg.servePointsWon,
+
+      returnPoints:
+        agg.returnPoints,
+
+      returnPointsWon:
+        agg.returnPointsWon
+    },
 
     confidence:
       agg.usableMatches >= 15
