@@ -3,6 +3,10 @@ import {
   normalizeName
 } from '../data/history.js';
 
+import {
+  resolveSurface
+} from './surfaceResolver.js';
+
 const indexCache = new Map();
 
 function num(value) {
@@ -976,6 +980,11 @@ export async function enrichMatchesWithStats(
 
   let surfaceResolvedMatches = 0;
 
+  let surfaceExactMatches = 0;
+  let surfaceAliasMatches = 0;
+  let surfaceFuzzyMatches = 0;
+  let surfaceUnknownMatches = 0;
+
   const enriched =
     matches.map(match => {
 
@@ -986,16 +995,46 @@ export async function enrichMatchesWithStats(
         return match;
       }
 
+      const surfaceMeta =
+        resolveSurface({
+          tournament:
+            match.tournament,
+
+          venue:
+            match.venue,
+
+          court:
+            match.court,
+
+          tournaments:
+            index.tournaments
+        });
+
       const surface =
-        inferSurface(
-          match.tournament,
-          index
-        );
+        surfaceMeta.surface;
 
       if (
         surface !== 'UNKNOWN'
       ) {
         surfaceResolvedMatches++;
+
+        if (
+          surfaceMeta.source ===
+          'HISTORY_EXACT'
+        ) {
+          surfaceExactMatches++;
+        } else if (
+          surfaceMeta.source.includes(
+            'ALIAS'
+          )
+        ) {
+          surfaceAliasMatches++;
+        } else {
+          surfaceFuzzyMatches++;
+        }
+
+      } else {
+        surfaceUnknownMatches++;
       }
 
       const profileA =
@@ -1040,6 +1079,7 @@ export async function enrichMatchesWithStats(
         ...match,
 
         surface,
+        surfaceMeta,
 
         playerA: {
           ...match.playerA,
@@ -1078,6 +1118,11 @@ export async function enrichMatchesWithStats(
       noProfiles,
 
       surfaceResolvedMatches,
+
+      surfaceExactMatches,
+      surfaceAliasMatches,
+      surfaceFuzzyMatches,
+      surfaceUnknownMatches,
 
       atpRows:
         atp.rows,

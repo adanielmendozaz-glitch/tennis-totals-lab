@@ -1502,3 +1502,51 @@ h1 {
       repeat(2, 1fr);
   }
 }
+
+/* SURFACE RESOLVER + MARKET READINESS v0.5.1 */
+
+.market-readiness {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 8px 12px;
+
+  border-top:
+    1px solid #17291f;
+
+  background: #09140f;
+}
+
+.market-readiness span {
+  color: #63776c;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.market-readiness strong {
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.market-readiness strong.ready {
+  color: #63efa2;
+}
+
+.market-readiness strong.watch {
+  color: #e8ce70;
+}
+
+.market-readiness strong.blocked {
+  color: #ee9875;
+}
+
+.market-readiness strong.live {
+  color: #9da8a2;
+}
+
+.surface-badge {
+  white-space: nowrap;
+}

@@ -4,6 +4,7 @@ import { enrichMatchesWithStats } from './engine/playerStats.js';
 import { enrichMatchesWithMatchup } from './engine/matchup.js';
 import { getMatchMarkets } from './data/espnOdds.js';
 import { evaluateMarket } from './engine/market.js';
+import { getMarketReadiness } from './engine/readiness.js';
 
 const app = document.querySelector('#app');
 
@@ -28,7 +29,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.5.0</div>
+        <div class="version">ATP + WTA · v0.5.1</div>
       </div>
 
       <button
@@ -501,6 +502,11 @@ function statsPanel(match) {
 
         <strong class="surface-badge">
           ${match.surface || 'UNKNOWN'}
+          ${
+            match.surfaceMeta?.confidencePct
+              ? ` · ${match.surfaceMeta.confidencePct}%`
+              : ''
+          }
         </strong>
       </div>
 
@@ -902,6 +908,11 @@ function marketPanel(match) {
     return '';
   }
 
+  const readiness =
+    getMarketReadiness(
+      match
+    );
+
   /*
    * El Market Engine es exclusivamente
    * PRE-MATCH en esta fase.
@@ -969,8 +980,27 @@ function marketPanel(match) {
           </strong>
         </div>
 
+        <div class="market-readiness">
+
+          <span>
+            MODEL READINESS
+          </span>
+
+          <strong class="${
+            readiness.status.toLowerCase()
+          }">
+            ${readiness.score.toFixed(1)}%
+            · ${readiness.status}
+          </strong>
+
+        </div>
+
         <div class="market-empty">
-          ESPN no publicó total utilizable para este partido.
+          ${
+            readiness.status === 'READY'
+              ? 'MODELO LISTO · esperando línea de mercado'
+              : 'ESPN no publicó total utilizable para este partido.'
+          }
         </div>
 
       </div>
@@ -1107,6 +1137,21 @@ function marketPanel(match) {
             ${marketOddsText(m.fairOdds)}
           </strong>
         </span>
+
+      </div>
+
+      <div class="market-readiness">
+
+        <span>
+          MODEL READINESS
+        </span>
+
+        <strong class="${
+          readiness.status.toLowerCase()
+        }">
+          ${readiness.score.toFixed(1)}%
+          · ${readiness.status}
+        </strong>
 
       </div>
 
