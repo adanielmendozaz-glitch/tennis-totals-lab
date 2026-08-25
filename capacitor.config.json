@@ -1,0 +1,10 @@
+{
+  "appId": "com.tennistotalslab.app",
+  "appName": "Tennis Totals Lab",
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
