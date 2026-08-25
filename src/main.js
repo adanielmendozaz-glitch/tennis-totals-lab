@@ -1,5 +1,6 @@
 import './style.css';
 import { getTodayMatches } from './data/espn.js';
+import { enrichMatchesWithStats } from './engine/playerStats.js';
 
 const app = document.querySelector('#app');
 
@@ -8,6 +9,7 @@ let activeTour = 'ALL';
 let activeTab = 'today';
 let loading = false;
 let lastUpdated = null;
+let statsGeneration = 0;
 
 app.innerHTML = `
   <main class="shell">
@@ -16,7 +18,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.1.2</div>
+        <div class="version">ATP + WTA · v0.2.0</div>
       </div>
 
       <button
@@ -129,6 +131,55 @@ app.innerHTML = `
         <div
           id="healthRejected"
           class="health-rejected">
+        </div>
+
+      </section>
+
+      <section id="playerDataPanel" class="player-data">
+
+        <div class="player-data-head">
+          <div>
+            <span>PLAYER DATA ENGINE</span>
+            <strong id="playerDataTitle">
+              Esperando históricos...
+            </strong>
+          </div>
+
+          <span
+            id="playerDataBadge"
+            class="player-data-badge loading">
+            LOAD
+          </span>
+        </div>
+
+        <div class="player-data-metrics">
+
+          <div>
+            <span>COBERTURA</span>
+            <strong id="playerCoverage">—</strong>
+          </div>
+
+          <div>
+            <span>PERFILES</span>
+            <strong id="playerProfiles">—</strong>
+          </div>
+
+          <div>
+            <span>SUPERFICIE</span>
+            <strong id="surfaceCoverage">—</strong>
+          </div>
+
+          <div>
+            <span>HISTÓRICOS</span>
+            <strong id="historyRows">—</strong>
+          </div>
+
+        </div>
+
+        <div
+          id="playerDataDetail"
+          class="player-data-detail">
+          ATP/WTA 2025–2026
         </div>
 
       </section>
@@ -259,6 +310,92 @@ function scoreCells(player, sets) {
   return cells.join('');
 }
 
+function statValue(value) {
+  return value === null ||
+    value === undefined
+      ? '—'
+      : `${value.toFixed(1)}%`;
+}
+
+function profileLine(player) {
+  const p =
+    player.profile;
+
+  if (!p) {
+    return `
+      <div class="profile-line missing">
+        <div class="profile-id">
+          <strong>${player.shortName || player.name}</strong>
+          <span>SIN PERFIL HISTÓRICO</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="profile-line">
+
+      <div class="profile-id">
+        <strong>${player.shortName || player.name}</strong>
+        <span>
+          ${p.rank ? `#${p.rank} · ` : ''}
+          ${p.sampleType}
+          · n=${p.sample}
+          · L10 ${p.last10Wins}-${p.last10Losses}
+        </span>
+      </div>
+
+      <div>
+        <span>HLD</span>
+        <b>${statValue(p.holdPct)}</b>
+      </div>
+
+      <div>
+        <span>BRK</span>
+        <b>${statValue(p.breakPct)}</b>
+      </div>
+
+      <div>
+        <span>SPW</span>
+        <b>${statValue(p.servePointsWonPct)}</b>
+      </div>
+
+      <div>
+        <span>RPW</span>
+        <b>${statValue(p.returnPointsWonPct)}</b>
+      </div>
+
+    </div>
+  `;
+}
+
+function statsPanel(match) {
+  const hasStats =
+    match.playerA.profile ||
+    match.playerB.profile;
+
+  if (!hasStats) {
+    return '';
+  }
+
+  return `
+    <div class="match-stats">
+
+      <div class="match-stats-head">
+        <span>PLAYER STATS</span>
+
+        <strong class="surface-badge">
+          ${match.surface || 'UNKNOWN'}
+        </strong>
+      </div>
+
+      ${profileLine(match.playerA)}
+      ${profileLine(match.playerB)}
+
+    </div>
+  `;
+}
+
 function matchCard(match) {
   const maxSets = Math.max(
     match.playerA.sets.length,
@@ -328,6 +465,8 @@ function matchCard(match) {
           ${scoreCells(match.playerB, maxSets)}
         </div>
       </div>
+
+      ${statsPanel(match)}
 
       <div class="model-strip">
         <span>Totals Engine</span>
@@ -526,6 +665,162 @@ function renderDataHealth(health) {
   `;
 }
 
+function renderPlayerDataLoading() {
+  const badge =
+    document.querySelector('#playerDataBadge');
+
+  badge.className =
+    'player-data-badge loading';
+
+  badge.textContent =
+    'LOAD';
+
+  document.querySelector(
+    '#playerDataTitle'
+  ).textContent =
+    'Cargando ATP/WTA históricos...';
+}
+
+function renderPlayerData(coverage) {
+  const badge =
+    document.querySelector('#playerDataBadge');
+
+  const pct =
+    Number(
+      coverage.percentage || 0
+    );
+
+  const quality =
+    pct >= 80
+      ? 'good'
+      : pct >= 60
+        ? 'partial'
+        : 'low';
+
+  badge.className =
+    `player-data-badge ${quality}`;
+
+  badge.textContent =
+    `${pct.toFixed(1)}%`;
+
+  document.querySelector(
+    '#playerDataTitle'
+  ).textContent =
+    'Perfiles estadísticos cargados';
+
+  document.querySelector(
+    '#playerCoverage'
+  ).textContent =
+    `${pct.toFixed(1)}%`;
+
+  document.querySelector(
+    '#playerProfiles'
+  ).textContent =
+    `${coverage.foundPlayers}/${coverage.totalPlayers}`;
+
+  document.querySelector(
+    '#surfaceCoverage'
+  ).textContent =
+    `${coverage.surfaceResolvedMatches}/${coverage.totalMatches}`;
+
+  document.querySelector(
+    '#historyRows'
+  ).textContent =
+    (
+      Number(coverage.atpRows || 0) +
+      Number(coverage.wtaRows || 0)
+    ).toLocaleString();
+
+  document.querySelector(
+    '#playerDataDetail'
+  ).innerHTML = `
+    <span>
+      Ambos perfiles:
+      <strong>${coverage.bothProfiles}</strong>
+    </span>
+
+    <span>
+      Uno:
+      <strong>${coverage.oneProfile}</strong>
+    </span>
+
+    <span>
+      Sin perfil:
+      <strong>${coverage.noProfiles}</strong>
+    </span>
+
+    <span>
+      Base:
+      ATP ${coverage.atpPlayers}
+      · WTA ${coverage.wtaPlayers}
+    </span>
+  `;
+}
+
+function renderPlayerDataError(error) {
+  const badge =
+    document.querySelector('#playerDataBadge');
+
+  badge.className =
+    'player-data-badge low';
+
+  badge.textContent =
+    'ERROR';
+
+  document.querySelector(
+    '#playerDataTitle'
+  ).textContent =
+    'No se pudieron cargar históricos';
+
+  document.querySelector(
+    '#playerDataDetail'
+  ).textContent =
+    error?.message || 'Historical Data Error';
+}
+
+async function loadPlayerStats(
+  snapshot,
+  generation
+) {
+  renderPlayerDataLoading();
+
+  try {
+    const result =
+      await enrichMatchesWithStats(
+        snapshot
+      );
+
+    if (
+      generation !==
+      statsGeneration
+    ) {
+      return;
+    }
+
+    matches =
+      result.matches;
+
+    renderMatches();
+
+    renderPlayerData(
+      result.coverage
+    );
+
+  } catch (error) {
+
+    if (
+      generation !==
+      statsGeneration
+    ) {
+      return;
+    }
+
+    renderPlayerDataError(
+      error
+    );
+  }
+}
+
 function setConnection(mode, text) {
   const dot = document.querySelector('#connectionDot');
   const label = document.querySelector('#connectionText');
@@ -552,9 +847,17 @@ async function refresh() {
     matches = result.matches;
     lastUpdated = new Date();
 
+    const statsToken =
+      ++statsGeneration;
+
     renderMetrics();
     renderMatches();
     renderDataHealth(result.health);
+
+    void loadPlayerStats(
+      result.matches,
+      statsToken
+    );
 
     setConnection(
       result.errors.length ? 'warning' : 'online',
