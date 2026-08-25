@@ -7,3 +7,7 @@ dist/
 android/.gradle/
 android/app/build/
 android/build/
+
+# Permanent Android signing keys
+*.jks
+*.keystore

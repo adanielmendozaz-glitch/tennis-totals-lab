@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 jobs:
@@ -38,15 +39,33 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Build Android APK
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Restore permanent signing key
+        run: |
+          printf '%s' "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" \
+            | base64 --decode \
+            > android/app/tennis-totals-lab-release.jks
+
+      - name: Build signed release APK
         working-directory: android
+        env:
+          APP_VERSION_CODE: ${{ github.run_number }}
+          APP_VERSION_NAME: ${{ steps.version.outputs.name }}
+          ANDROID_KEYSTORE_PATH: tennis-totals-lab-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
-      - name: Upload APK
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: tennis-totals-lab-v0.1.2
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: tennis-totals-lab-${{ steps.version.outputs.name }}
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

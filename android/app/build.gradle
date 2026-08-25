@@ -1,5 +1,19 @@
 apply plugin: 'com.android.application'
 
+def appVersionCode =
+    (System.getenv("APP_VERSION_CODE") ?: "1").toInteger()
+
+def appVersionName =
+    System.getenv("APP_VERSION_NAME") ?: "0.1.2"
+
+def releaseKeystorePath =
+    System.getenv("ANDROID_KEYSTORE_PATH")
+
+def hasReleaseSigning =
+    releaseKeystorePath != null &&
+    !releaseKeystorePath.isEmpty()
+
+
 android {
     namespace = "com.tennistotalslab.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +21,8 @@ android {
         applicationId "com.tennistotalslab.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +30,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseKeystorePath)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias "tennis_totals_lab"
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
