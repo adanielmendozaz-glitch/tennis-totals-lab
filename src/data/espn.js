@@ -40,6 +40,7 @@ async function request(url) {
     }
 
     return response.data;
+
   } catch (nativeError) {
     const response = await fetch(url);
 
@@ -51,8 +52,8 @@ async function request(url) {
   }
 }
 
-function detectTour(group) {
-  const text = [
+function groupingText(group) {
+  return [
     group?.grouping?.displayName,
     group?.grouping?.name,
     group?.grouping?.slug,
@@ -61,6 +62,10 @@ function detectTour(group) {
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
+}
+
+function detectTour(group) {
+  const text = groupingText(group);
 
   if (
     text.includes("women") ||
@@ -84,23 +89,42 @@ function detectTour(group) {
 }
 
 function isSingles(group) {
-  const text = [
-    group?.grouping?.displayName,
-    group?.grouping?.name,
-    group?.grouping?.slug,
-    group?.name
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
+  return groupingText(group).includes('single');
+}
 
-  return text.includes('single');
+function isDoubles(group) {
+  return groupingText(group).includes('double');
 }
 
 function score(player) {
   return (player?.linescores || []).map(set =>
     String(set.displayValue ?? set.value ?? '')
   );
+}
+
+function playerKey(player) {
+  return String(
+    player?.id ||
+    player?.name ||
+    player?.shortName ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function matchupKey(match) {
+  const players = [
+    playerKey(match.playerA),
+    playerKey(match.playerB)
+  ].sort();
+
+  return [
+    match.tour,
+    match.tournamentId,
+    dateKeyFromIso(match.date),
+    ...players
+  ].join('|');
 }
 
 function normalizeCompetition(
@@ -179,6 +203,7 @@ function normalizeCompetition(
 
     playerA: {
       id: String(playerA.id || ''),
+
       name:
         playerA.athlete?.displayName ||
         playerA.athlete?.fullName ||
@@ -206,6 +231,7 @@ function normalizeCompetition(
 
     playerB: {
       id: String(playerB.id || ''),
+
       name:
         playerB.athlete?.displayName ||
         playerB.athlete?.fullName ||
@@ -233,45 +259,128 @@ function normalizeCompetition(
   };
 }
 
-function normalize(data, requestedDate) {
-  const requestedKey =
-    localDateKey(requestedDate);
+function inspectOutput(matches, requestedKey) {
+  const ids = new Set();
+  const matchups = new Set();
 
-  const matches = [];
+  const issues = {
+    duplicateIds: 0,
+    duplicateMatchups: 0,
+    outsideDate: 0,
+    invalidTour: 0,
+    nonSingles: 0
+  };
+
+  for (const match of matches) {
+
+    if (match.id) {
+      if (ids.has(match.id)) {
+        issues.duplicateIds += 1;
+      }
+
+      ids.add(match.id);
+    }
+
+    const key = matchupKey(match);
+
+    if (matchups.has(key)) {
+      issues.duplicateMatchups += 1;
+    }
+
+    matchups.add(key);
+
+    if (dateKeyFromIso(match.date) !== requestedKey) {
+      issues.outsideDate += 1;
+    }
+
+    if (!['ATP', 'WTA'].includes(match.tour)) {
+      issues.invalidTour += 1;
+    }
+
+    if (
+      !String(match.type)
+        .toLowerCase()
+        .includes('single')
+    ) {
+      issues.nonSingles += 1;
+    }
+  }
+
+  return issues;
+}
+
+function normalize(data, requestedDate) {
+  const requestedKey = localDateKey(requestedDate);
+
+  const diagnostics = {
+    received: 0,
+    singlesCandidates: 0,
+    acceptedBeforeDedupe: 0,
+
+    doublesRejected: 0,
+    nonSinglesRejected: 0,
+    outsideDateRejected: 0,
+    missingDateRejected: 0,
+    unknownTourRejected: 0,
+    invalidCompetitorsRejected: 0,
+
+    duplicateIdsRemoved: 0,
+    duplicateMatchupsRemoved: 0
+  };
+
+  const candidates = [];
 
   for (const tournament of data?.events || []) {
 
     for (const group of tournament.groupings || []) {
 
+      const competitions =
+        group.competitions || [];
+
+      diagnostics.received +=
+        competitions.length;
+
       if (!isSingles(group)) {
+
+        if (isDoubles(group)) {
+          diagnostics.doublesRejected +=
+            competitions.length;
+        } else {
+          diagnostics.nonSinglesRejected +=
+            competitions.length;
+        }
+
         continue;
       }
 
-      const tour =
-        detectTour(group);
+      const tour = detectTour(group);
 
       if (!tour) {
+        diagnostics.unknownTourRejected +=
+          competitions.length;
+
         continue;
       }
 
-      for (const comp of group.competitions || []) {
+      for (const comp of competitions) {
+
+        diagnostics.singlesCandidates += 1;
 
         const matchDate =
           comp.date ||
           comp.startDate ||
           '';
 
-        /*
-         * ESPN puede devolver el cuadro completo
-         * del torneo aunque pidamos un solo día.
-         *
-         * Aquí nos quedamos SOLAMENTE con partidos
-         * cuya fecha local corresponde a HOY.
-         */
+        if (!matchDate) {
+          diagnostics.missingDateRejected += 1;
+          continue;
+        }
+
         if (
-          matchDate &&
-          dateKeyFromIso(matchDate) !== requestedKey
+          dateKeyFromIso(matchDate) !==
+          requestedKey
         ) {
+          diagnostics.outsideDateRejected += 1;
           continue;
         }
 
@@ -283,34 +392,149 @@ function normalize(data, requestedDate) {
             tour
           );
 
-        if (match) {
-          matches.push(match);
+        if (!match) {
+          diagnostics.invalidCompetitorsRejected += 1;
+          continue;
         }
+
+        candidates.push(match);
+        diagnostics.acceptedBeforeDedupe += 1;
       }
     }
   }
 
-  /*
-   * Dedupe GLOBAL.
-   * Ya no usamos ATP-id y WTA-id porque el mismo
-   * partido nunca debe aparecer dos veces.
-   */
-  const unique =
-    new Map();
+  const ids = new Set();
+  const matchups = new Set();
 
-  for (const match of matches) {
-    const key =
-      match.id ||
-      [
-        match.playerA.name,
-        match.playerB.name,
-        match.date
-      ].join('|');
+  const matches = [];
 
-    unique.set(key, match);
+  for (const match of candidates) {
+
+    if (
+      match.id &&
+      ids.has(match.id)
+    ) {
+      diagnostics.duplicateIdsRemoved += 1;
+      continue;
+    }
+
+    const key = matchupKey(match);
+
+    if (matchups.has(key)) {
+      diagnostics.duplicateMatchupsRemoved += 1;
+      continue;
+    }
+
+    if (match.id) {
+      ids.add(match.id);
+    }
+
+    matchups.add(key);
+    matches.push(match);
   }
 
-  return [...unique.values()];
+  const outputIssues =
+    inspectOutput(
+      matches,
+      requestedKey
+    );
+
+  const outputIssueCount =
+    Object.values(outputIssues)
+      .reduce(
+        (sum, value) => sum + value,
+        0
+      );
+
+  const tournaments =
+    new Set(
+      matches.map(
+        match =>
+          `${match.tour}|${match.tournamentId}|${match.tournament}`
+      )
+    );
+
+  const health = {
+    status:
+      outputIssueCount === 0
+        ? 'clean'
+        : 'warning',
+
+    requestedDate: requestedKey,
+
+    received:
+      diagnostics.received,
+
+    singlesCandidates:
+      diagnostics.singlesCandidates,
+
+    acceptedBeforeDedupe:
+      diagnostics.acceptedBeforeDedupe,
+
+    unique:
+      matches.length,
+
+    tournaments:
+      tournaments.size,
+
+    atp:
+      matches.filter(
+        match => match.tour === 'ATP'
+      ).length,
+
+    wta:
+      matches.filter(
+        match => match.tour === 'WTA'
+      ).length,
+
+    live:
+      matches.filter(
+        match => match.state === 'in'
+      ).length,
+
+    pre:
+      matches.filter(
+        match => match.state === 'pre'
+      ).length,
+
+    final:
+      matches.filter(
+        match => match.state === 'post'
+      ).length,
+
+    rejected: {
+      doubles:
+        diagnostics.doublesRejected,
+
+      otherGroups:
+        diagnostics.nonSinglesRejected,
+
+      outsideDate:
+        diagnostics.outsideDateRejected,
+
+      missingDate:
+        diagnostics.missingDateRejected,
+
+      unknownTour:
+        diagnostics.unknownTourRejected,
+
+      invalidCompetitors:
+        diagnostics.invalidCompetitorsRejected,
+
+      duplicateIds:
+        diagnostics.duplicateIdsRemoved,
+
+      duplicateMatchups:
+        diagnostics.duplicateMatchupsRemoved
+    },
+
+    outputIssues
+  };
+
+  return {
+    matches,
+    health
+  };
 }
 
 export async function getTodayMatches(
@@ -325,10 +549,14 @@ export async function getTodayMatches(
   const data =
     await request(url);
 
-  const matches =
+  const normalized =
     normalize(data, date);
 
+  const matches =
+    normalized.matches;
+
   matches.sort((a, b) => {
+
     const priority = {
       in: 0,
       pre: 1,
@@ -351,6 +579,7 @@ export async function getTodayMatches(
 
   return {
     matches,
+    health: normalized.health,
     errors: []
   };
 }

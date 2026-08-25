@@ -16,7 +16,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.1.1</div>
+        <div class="version">ATP + WTA · v0.1.2</div>
       </div>
 
       <button
@@ -80,6 +80,58 @@ app.innerHTML = `
           ● LIVE
         </button>
       </div>
+
+      <section id="dataHealthPanel" class="data-health">
+
+        <div class="health-head">
+          <div>
+            <span>DATA HEALTH</span>
+            <strong id="healthTitle">Auditando feed...</strong>
+          </div>
+
+          <span
+            id="healthBadge"
+            class="health-badge checking">
+            CHECK
+          </span>
+        </div>
+
+        <div class="health-metrics">
+
+          <div>
+            <span>ENTRADA</span>
+            <strong id="healthReceived">—</strong>
+          </div>
+
+          <div>
+            <span>VÁLIDOS</span>
+            <strong id="healthValid">—</strong>
+          </div>
+
+          <div>
+            <span>ÚNICOS</span>
+            <strong id="healthUnique">—</strong>
+          </div>
+
+          <div>
+            <span>TORNEOS</span>
+            <strong id="healthTournaments">—</strong>
+          </div>
+
+        </div>
+
+        <div
+          id="healthChecks"
+          class="health-checks">
+          Esperando auditoría...
+        </div>
+
+        <div
+          id="healthRejected"
+          class="health-rejected">
+        </div>
+
+      </section>
 
       <div id="loadingPanel" class="loading-panel">
         <div class="loader"></div>
@@ -346,6 +398,134 @@ function renderMetrics() {
     matches.filter(m => m.tour === 'WTA').length;
 }
 
+function renderDataHealth(health) {
+  const badge =
+    document.querySelector('#healthBadge');
+
+  const title =
+    document.querySelector('#healthTitle');
+
+  if (!health) {
+    badge.className =
+      'health-badge warning';
+
+    badge.textContent =
+      'SIN DATA';
+
+    title.textContent =
+      'Auditoría no disponible';
+
+    return;
+  }
+
+  const issues =
+    health.outputIssues || {};
+
+  const outputIssues =
+    Object.values(issues)
+      .reduce(
+        (sum, value) =>
+          sum + Number(value || 0),
+        0
+      );
+
+  const clean =
+    health.status === 'clean' &&
+    outputIssues === 0;
+
+  badge.className =
+    `health-badge ${clean ? 'clean' : 'warning'}`;
+
+  badge.textContent =
+    clean ? 'LIMPIO' : 'REVISAR';
+
+  title.textContent =
+    clean
+      ? 'Dataset validado'
+      : 'Se detectaron anomalías';
+
+  document.querySelector(
+    '#healthReceived'
+  ).textContent =
+    health.received ?? '—';
+
+  document.querySelector(
+    '#healthValid'
+  ).textContent =
+    health.acceptedBeforeDedupe ?? '—';
+
+  document.querySelector(
+    '#healthUnique'
+  ).textContent =
+    health.unique ?? '—';
+
+  document.querySelector(
+    '#healthTournaments'
+  ).textContent =
+    health.tournaments ?? '—';
+
+  const duplicateOutput =
+    Number(issues.duplicateIds || 0) +
+    Number(issues.duplicateMatchups || 0);
+
+  const checks = [
+    [
+      'Duplicados en salida',
+      duplicateOutput
+    ],
+    [
+      'Dobles en salida',
+      Number(issues.nonSingles || 0)
+    ],
+    [
+      'Fuera de fecha',
+      Number(issues.outsideDate || 0)
+    ],
+    [
+      'Tour inválido',
+      Number(issues.invalidTour || 0)
+    ]
+  ];
+
+  document.querySelector(
+    '#healthChecks'
+  ).innerHTML =
+    checks.map(([label, count]) => `
+      <div class="health-check ${count === 0 ? 'ok' : 'bad'}">
+        <span>${count === 0 ? '✓' : '!'}</span>
+        <strong>${label}</strong>
+        <b>${count}</b>
+      </div>
+    `).join('');
+
+  const r =
+    health.rejected || {};
+
+  const blocked =
+    Number(r.doubles || 0) +
+    Number(r.otherGroups || 0) +
+    Number(r.outsideDate || 0) +
+    Number(r.missingDate || 0) +
+    Number(r.unknownTour || 0) +
+    Number(r.invalidCompetitors || 0) +
+    Number(r.duplicateIds || 0) +
+    Number(r.duplicateMatchups || 0);
+
+  document.querySelector(
+    '#healthRejected'
+  ).innerHTML = `
+    <span>Bloqueados antes del modelo: <strong>${blocked}</strong></span>
+    <span>
+      Dobles ${r.doubles || 0}
+      · otras fechas ${r.outsideDate || 0}
+      · duplicados ${
+        Number(r.duplicateIds || 0) +
+        Number(r.duplicateMatchups || 0)
+      }
+    </span>
+  `;
+}
+
 function setConnection(mode, text) {
   const dot = document.querySelector('#connectionDot');
   const label = document.querySelector('#connectionText');
@@ -374,6 +554,7 @@ async function refresh() {
 
     renderMetrics();
     renderMatches();
+    renderDataHealth(result.health);
 
     setConnection(
       result.errors.length ? 'warning' : 'online',

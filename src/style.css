@@ -521,3 +521,164 @@ h1 {
     min-width: 19px;
   }
 }
+
+/* DATA HEALTH v0.1.2 */
+
+.data-health {
+  margin-bottom: 16px;
+  overflow: hidden;
+  border: 1px solid #1d3c2d;
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(15, 31, 23, .96),
+      rgba(7, 16, 11, .96)
+    );
+}
+
+.health-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid #182a21;
+}
+
+.health-head > div > span {
+  display: block;
+  color: #5ee99c;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.health-head > div > strong {
+  display: block;
+  margin-top: 3px;
+  color: #d9e7df;
+  font-size: 12px;
+}
+
+.health-badge {
+  flex-shrink: 0;
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.health-badge.checking {
+  color: #f0d786;
+  background: #2d2715;
+}
+
+.health-badge.clean {
+  color: #65f1a3;
+  background: #103522;
+}
+
+.health-badge.warning {
+  color: #ffd17c;
+  background: #362713;
+}
+
+.health-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: #17281f;
+}
+
+.health-metrics > div {
+  min-width: 0;
+  padding: 10px 8px;
+  background: #0b1711;
+}
+
+.health-metrics span {
+  display: block;
+  color: #64796e;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .09em;
+}
+
+.health-metrics strong {
+  display: block;
+  margin-top: 3px;
+  color: #eef6f1;
+  font-size: 16px;
+}
+
+.health-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding: 11px 12px;
+}
+
+.health-check {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 9px;
+  background: #101b16;
+}
+
+.health-check span {
+  font-weight: 900;
+}
+
+.health-check strong {
+  overflow: hidden;
+  color: #899c92;
+  font-size: 8px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-check b {
+  font-size: 9px;
+}
+
+.health-check.ok span,
+.health-check.ok b {
+  color: #5eed9e;
+}
+
+.health-check.bad span,
+.health-check.bad b {
+  color: #ffb16e;
+}
+
+.health-rejected {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px 11px;
+  border-top: 1px solid #17261f;
+  color: #60756a;
+  font-size: 8px;
+}
+
+.health-rejected strong {
+  color: #a9bbb1;
+}
+
+@media (max-width: 400px) {
+  .health-checks {
+    grid-template-columns: 1fr;
+  }
+
+  .health-rejected {
+    flex-direction: column;
+    gap: 3px;
+  }
+}
