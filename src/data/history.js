@@ -2,9 +2,9 @@ import { CapacitorHttp } from '@capacitor/core';
 
 const SOURCES = {
   ATP:
-    'https://raw.githubusercontent.com/JeffSackmann/tennis_atp/master',
+    'https://raw.githubusercontent.com/Aneeshers/tennis-sackmann-archive/main/atp',
   WTA:
-    'https://raw.githubusercontent.com/JeffSackmann/tennis_wta/master'
+    'https://raw.githubusercontent.com/Aneeshers/tennis-sackmann-archive/main/wta'
 };
 
 const memoryCache = new Map();
