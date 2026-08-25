@@ -371,6 +371,13 @@ function profileComplete(profile) {
   );
 }
 
+function enoughSample(profile) {
+  return (
+    profileComplete(profile) &&
+    Number(profile.sample || 0) >= 8
+  );
+}
+
 function classify(
   match,
   baseline
@@ -390,8 +397,8 @@ function classify(
 
   const full =
     match.surface !== 'UNKNOWN' &&
-    profileComplete(a) &&
-    profileComplete(b) &&
+    enoughSample(a) &&
+    enoughSample(b) &&
     baseline?.spw !== null &&
     baseline?.hold !== null;
 
