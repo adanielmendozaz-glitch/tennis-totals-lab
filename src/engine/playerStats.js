@@ -6,6 +6,14 @@ import {
 const indexCache = new Map();
 
 function num(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    String(value).trim() === ''
+  ) {
+    return null;
+  }
+
   const n = Number(value);
 
   return Number.isFinite(n)
@@ -393,6 +401,7 @@ function aggregate(records) {
   let usableMatches = 0;
 
   for (const r of records) {
+    let used = false;
 
     if (
       r.svGms !== null &&
@@ -416,6 +425,8 @@ function aggregate(records) {
           r.svGms -
           broken
         );
+
+      used = true;
     }
 
     if (
@@ -433,6 +444,8 @@ function aggregate(records) {
           r.oppBpFaced -
           r.oppBpSaved
         );
+
+      used = true;
     }
 
     if (
@@ -447,6 +460,8 @@ function aggregate(records) {
       servePointsWon +=
         r.firstWon +
         r.secondWon;
+
+      used = true;
     }
 
     if (
@@ -468,9 +483,13 @@ function aggregate(records) {
           r.oppSvpt -
           opponentWon
         );
+
+      used = true;
     }
 
-    usableMatches++;
+    if (used) {
+      usableMatches++;
+    }
   }
 
   return {

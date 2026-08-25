@@ -1,6 +1,7 @@
 import './style.css';
 import { getTodayMatches } from './data/espn.js';
 import { enrichMatchesWithStats } from './engine/playerStats.js';
+import { enrichMatchesWithMatchup } from './engine/matchup.js';
 
 const app = document.querySelector('#app');
 
@@ -18,7 +19,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.2.1</div>
+        <div class="version">ATP + WTA · v0.2.2</div>
       </div>
 
       <button
@@ -180,6 +181,57 @@ app.innerHTML = `
           id="playerDataDetail"
           class="player-data-detail">
           ATP/WTA 2025–2026
+        </div>
+
+      </section>
+
+      <section
+        id="matchupEnginePanel"
+        class="matchup-engine">
+
+        <div class="matchup-engine-head">
+          <div>
+            <span>MATCHUP ENGINE</span>
+            <strong id="matchupEngineTitle">
+              Esperando perfiles...
+            </strong>
+          </div>
+
+          <span
+            id="matchupEngineBadge"
+            class="matchup-engine-badge loading">
+            WAIT
+          </span>
+        </div>
+
+        <div class="matchup-engine-metrics">
+
+          <div>
+            <span>FULL DATA</span>
+            <strong id="matchupFull">—</strong>
+          </div>
+
+          <div>
+            <span>PARTIAL</span>
+            <strong id="matchupPartial">—</strong>
+          </div>
+
+          <div>
+            <span>NO DATA</span>
+            <strong id="matchupNone">—</strong>
+          </div>
+
+          <div>
+            <span>MARKOV READY</span>
+            <strong id="matchupReady">—</strong>
+          </div>
+
+        </div>
+
+        <div
+          id="matchupEngineDetail"
+          class="matchup-engine-detail">
+          Surface-adjusted baselines
         </div>
 
       </section>
@@ -396,6 +448,144 @@ function statsPanel(match) {
   `;
 }
 
+function signedPct(value) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return '—';
+  }
+
+  const n =
+    Number(value);
+
+  if (!Number.isFinite(n)) {
+    return '—';
+  }
+
+  return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+}
+
+function matchupPlayerLine(
+  player,
+  projection
+) {
+  return `
+    <div class="matchup-player-line">
+
+      <div class="matchup-player-name">
+        <strong>${player.shortName || player.name}</strong>
+        <span>
+          Reliability ${projection.reliabilityPct?.toFixed(1) || '—'}%
+        </span>
+      </div>
+
+      <div>
+        <span>pSRV</span>
+        <b>${projection.servePointPct?.toFixed(1) || '—'}%</b>
+      </div>
+
+      <div>
+        <span>pHOLD</span>
+        <b>${projection.holdPct?.toFixed(1) || '—'}%</b>
+      </div>
+
+      <div>
+        <span>ΔBASE</span>
+        <b>${signedPct(projection.serveDeltaPct)}</b>
+      </div>
+
+    </div>
+  `;
+}
+
+function matchupPanel(match) {
+  const m =
+    match.matchup;
+
+  if (!m) {
+    return '';
+  }
+
+  const statusClass =
+    m.status === 'FULL'
+      ? 'full'
+      : m.status === 'PARTIAL'
+        ? 'partial'
+        : 'none';
+
+  if (
+    m.status === 'NO_DATA'
+  ) {
+    return `
+      <div class="matchup-box">
+
+        <div class="matchup-box-head">
+          <span>MATCHUP ENGINE</span>
+
+          <strong class="matchup-status none">
+            NO DATA
+          </strong>
+        </div>
+
+        <div class="matchup-empty">
+          Excluido del Markov hasta tener perfiles suficientes.
+        </div>
+
+      </div>
+    `;
+  }
+
+  return `
+    <div class="matchup-box">
+
+      <div class="matchup-box-head">
+        <span>
+          MATCHUP ENGINE · PRE-MATCH
+        </span>
+
+        <strong class="matchup-status ${statusClass}">
+          ${m.status}
+        </strong>
+      </div>
+
+      ${matchupPlayerLine(
+        match.playerA,
+        m.playerA
+      )}
+
+      ${matchupPlayerLine(
+        match.playerB,
+        m.playerB
+      )}
+
+      <div class="matchup-baseline">
+        <span>
+          ${match.tour}
+          ${m.baselineSurface}
+          BASE
+        </span>
+
+        <span>
+          SPW
+          <strong>${m.baseline.servePointPct?.toFixed(1)}%</strong>
+        </span>
+
+        <span>
+          HOLD
+          <strong>${m.baseline.holdPct?.toFixed(1)}%</strong>
+        </span>
+
+        <span>
+          AVG pHOLD
+          <strong>${m.averageHoldPct?.toFixed(1)}%</strong>
+        </span>
+      </div>
+
+    </div>
+  `;
+}
+
 function matchCard(match) {
   const maxSets = Math.max(
     match.playerA.sets.length,
@@ -468,10 +658,35 @@ function matchCard(match) {
 
       ${statsPanel(match)}
 
+      ${matchupPanel(match)}
+
       <div class="model-strip">
         <span>Totals Engine</span>
-        <strong>Esperando modelo</strong>
-        <span class="pending-badge">NO ANALIZADO</span>
+
+        <strong>
+          ${
+            match.matchup?.markovReady
+              ? 'Entrada Markov lista'
+              : match.matchup?.status === 'PARTIAL'
+                ? 'Datos parciales'
+                : 'Sin entrada suficiente'
+          }
+        </strong>
+
+        <span
+          class="pending-badge ${
+            match.matchup?.markovReady
+              ? 'ready'
+              : ''
+          }">
+          ${
+            match.matchup?.markovReady
+              ? 'MATCHUP READY'
+              : match.matchup?.status === 'PARTIAL'
+                ? 'PARTIAL'
+                : 'PASS DATA'
+          }
+        </span>
       </div>
 
     </article>
@@ -665,6 +880,127 @@ function renderDataHealth(health) {
   `;
 }
 
+function renderMatchupLoading() {
+  const badge =
+    document.querySelector(
+      '#matchupEngineBadge'
+    );
+
+  badge.className =
+    'matchup-engine-badge loading';
+
+  badge.textContent =
+    'WAIT';
+
+  document.querySelector(
+    '#matchupEngineTitle'
+  ).textContent =
+    'Calculando cruces y baselines...';
+}
+
+function renderMatchupData(summary) {
+  const badge =
+    document.querySelector(
+      '#matchupEngineBadge'
+    );
+
+  const pct =
+    summary.total
+      ? (
+          summary.markovReady /
+          summary.total *
+          100
+        )
+      : 0;
+
+  badge.className =
+    `matchup-engine-badge ${
+      pct >= 50
+        ? 'good'
+        : 'partial'
+    }`;
+
+  badge.textContent =
+    `${pct.toFixed(1)}%`;
+
+  document.querySelector(
+    '#matchupEngineTitle'
+  ).textContent =
+    'Cross-matchup calculado';
+
+  document.querySelector(
+    '#matchupFull'
+  ).textContent =
+    summary.full;
+
+  document.querySelector(
+    '#matchupPartial'
+  ).textContent =
+    summary.partial;
+
+  document.querySelector(
+    '#matchupNone'
+  ).textContent =
+    summary.noData;
+
+  document.querySelector(
+    '#matchupReady'
+  ).textContent =
+    summary.markovReady;
+
+  const atpHard =
+    summary.atp?.hard;
+
+  const wtaHard =
+    summary.wta?.hard;
+
+  const pctText = value =>
+    value === null ||
+    value === undefined
+      ? '—'
+      : `${(value * 100).toFixed(1)}%`;
+
+  document.querySelector(
+    '#matchupEngineDetail'
+  ).innerHTML = `
+    <span>
+      ATP HARD:
+      SPW <strong>${pctText(atpHard?.spw)}</strong>
+      · HOLD <strong>${pctText(atpHard?.hold)}</strong>
+    </span>
+
+    <span>
+      WTA HARD:
+      SPW <strong>${pctText(wtaHard?.spw)}</strong>
+      · HOLD <strong>${pctText(wtaHard?.hold)}</strong>
+    </span>
+  `;
+}
+
+function renderMatchupError(error) {
+  const badge =
+    document.querySelector(
+      '#matchupEngineBadge'
+    );
+
+  badge.className =
+    'matchup-engine-badge low';
+
+  badge.textContent =
+    'ERROR';
+
+  document.querySelector(
+    '#matchupEngineTitle'
+  ).textContent =
+    'Matchup Engine detenido';
+
+  document.querySelector(
+    '#matchupEngineDetail'
+  ).textContent =
+    error?.message ||
+    'Matchup Engine Error';
+}
+
 function renderPlayerDataLoading() {
   const badge =
     document.querySelector('#playerDataBadge');
@@ -783,11 +1119,17 @@ async function loadPlayerStats(
   generation
 ) {
   renderPlayerDataLoading();
+  renderMatchupLoading();
 
   try {
-    const result =
+    const statsResult =
       await enrichMatchesWithStats(
         snapshot
+      );
+
+    const matchupResult =
+      await enrichMatchesWithMatchup(
+        statsResult.matches
       );
 
     if (
@@ -798,12 +1140,16 @@ async function loadPlayerStats(
     }
 
     matches =
-      result.matches;
+      matchupResult.matches;
 
     renderMatches();
 
     renderPlayerData(
-      result.coverage
+      statsResult.coverage
+    );
+
+    renderMatchupData(
+      matchupResult.summary
     );
 
   } catch (error) {
@@ -816,6 +1162,10 @@ async function loadPlayerStats(
     }
 
     renderPlayerDataError(
+      error
+    );
+
+    renderMatchupError(
       error
     );
   }
