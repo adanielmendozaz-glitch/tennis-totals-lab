@@ -21,6 +21,79 @@ const totalsCache = new Map();
 
 const TOTALS_SIMULATIONS = 40000;
 
+const MANUAL_MARKETS_KEY =
+  'tennis_totals_lab_manual_markets_v1';
+
+function loadManualMarkets() {
+  try {
+    return JSON.parse(
+      localStorage.getItem(
+        MANUAL_MARKETS_KEY
+      ) || '{}'
+    );
+  } catch {
+    return {};
+  }
+}
+
+let manualMarkets =
+  loadManualMarkets();
+
+function saveManualMarkets() {
+  localStorage.setItem(
+    MANUAL_MARKETS_KEY,
+    JSON.stringify(
+      manualMarkets
+    )
+  );
+}
+
+function manualMarketFor(match) {
+  return (
+    manualMarkets[
+      String(match.id)
+    ] ||
+    null
+  );
+}
+
+function setManualMarket(
+  match,
+  market
+) {
+  manualMarkets[
+    String(match.id)
+  ] = market;
+
+  saveManualMarkets();
+
+  match.marketDecision =
+    evaluateMarket(
+      match,
+      market
+    );
+
+  match.marketChecked =
+    true;
+
+  match.marketLoading =
+    false;
+}
+
+function removeManualMarket(
+  match
+) {
+  delete manualMarkets[
+    String(match.id)
+  ];
+
+  saveManualMarkets();
+
+  match.marketDecision =
+    null;
+}
+
+
 
 app.innerHTML = `
   <main class="shell">
@@ -29,7 +102,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.5.1</div>
+        <div class="version">ATP + WTA · v0.5.2</div>
       </div>
 
       <button
@@ -1003,6 +1076,63 @@ function marketPanel(match) {
           }
         </div>
 
+        ${
+          readiness.status === 'READY'
+            ? `
+              <div
+                class="manual-market"
+                data-match-id="${match.id}">
+
+                <div class="manual-market-title">
+                  INGRESAR MERCADO MANUAL
+                </div>
+
+                <div class="manual-market-grid">
+
+                  <label>
+                    <span>LINE</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      inputmode="decimal"
+                      data-manual-line
+                      placeholder="22.5"
+                    />
+                  </label>
+
+                  <label>
+                    <span>OVER</span>
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      data-manual-over
+                      placeholder="-110"
+                    />
+                  </label>
+
+                  <label>
+                    <span>UNDER</span>
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      data-manual-under
+                      placeholder="-110"
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    data-manual-apply="${match.id}">
+                    ANALIZAR
+                  </button>
+
+                </div>
+
+              </div>
+            `
+            : ''
+        }
+
       </div>
     `;
   }
@@ -1846,6 +1976,32 @@ async function startMarketEngine(
         candidates[index];
 
       try {
+        const manual =
+          manualMarketFor(
+            match
+          );
+
+        if (manual) {
+          match.markets =
+            [manual];
+
+          match.marketDecision =
+            evaluateMarket(
+              match,
+              manual
+            );
+
+          match.marketLoading =
+            false;
+
+          match.marketChecked =
+            true;
+
+          renderMatches();
+
+          continue;
+        }
+
         const markets =
           await getMatchMarkets(
             match
@@ -2243,7 +2399,112 @@ async function refresh() {
 
   loading = true;
 
-  document.querySelector('#refreshBtn').classList.add('spinning');
+  
+document.addEventListener(
+  'click',
+  event => {
+
+    const button =
+      event.target.closest(
+        '[data-manual-apply]'
+      );
+
+    if (!button) {
+      return;
+    }
+
+    const matchId =
+      button.getAttribute(
+        'data-manual-apply'
+      );
+
+    const match =
+      matches.find(
+        item =>
+          String(item.id) ===
+          String(matchId)
+      );
+
+    if (!match) {
+      return;
+    }
+
+    const container =
+      button.closest(
+        '.manual-market'
+      );
+
+    const line =
+      Number(
+        container
+          ?.querySelector(
+            '[data-manual-line]'
+          )
+          ?.value
+      );
+
+    const overOdds =
+      Number(
+        container
+          ?.querySelector(
+            '[data-manual-over]'
+          )
+          ?.value
+      );
+
+    const underOdds =
+      Number(
+        container
+          ?.querySelector(
+            '[data-manual-under]'
+          )
+          ?.value
+      );
+
+    if (
+      !Number.isFinite(line) ||
+      line < 10.5 ||
+      line > 60.5
+    ) {
+      alert(
+        'Línea O/U inválida'
+      );
+
+      return;
+    }
+
+    const market = {
+      provider:
+        'MANUAL',
+
+      source:
+        'MANUAL',
+
+      line,
+
+      overOdds:
+        Number.isFinite(overOdds) &&
+        overOdds !== 0
+          ? overOdds
+          : null,
+
+      underOdds:
+        Number.isFinite(underOdds) &&
+        underOdds !== 0
+          ? underOdds
+          : null
+    };
+
+    setManualMarket(
+      match,
+      market
+    );
+
+    renderMatches();
+  }
+);
+
+document.querySelector('#refreshBtn').classList.add('spinning');
 
   loadingPanel.classList.remove('hidden');
   errorPanel.classList.add('hidden');

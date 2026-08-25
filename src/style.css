@@ -1550,3 +1550,73 @@ h1 {
 .surface-badge {
   white-space: nowrap;
 }
+
+/* MANUAL MARKET BRIDGE v0.5.2 */
+
+.manual-market {
+  padding: 10px 12px;
+  border-top: 1px solid #183025;
+  background: #09150f;
+}
+
+.manual-market-title {
+  margin-bottom: 8px;
+  color: #68eaa1;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.manual-market-grid {
+  display: grid;
+  grid-template-columns:
+    1fr 1fr 1fr auto;
+  gap: 6px;
+}
+
+.manual-market label span {
+  display: block;
+  margin-bottom: 4px;
+  color: #61776b;
+  font-size: 6px;
+  font-weight: 900;
+}
+
+.manual-market input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #284336;
+  border-radius: 8px;
+  padding: 8px;
+  background: #07110c;
+  color: #eef7f1;
+  font-size: 11px;
+  outline: none;
+}
+
+.manual-market input:focus {
+  border-color: #54de95;
+}
+
+.manual-market button {
+  align-self: end;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #51e596;
+  color: #07110c;
+  font-size: 7px;
+  font-weight: 900;
+}
+
+@media (max-width: 420px) {
+  .manual-market-grid {
+    grid-template-columns:
+      repeat(3, 1fr);
+  }
+
+  .manual-market button {
+    grid-column:
+      1 / -1;
+  }
+}
