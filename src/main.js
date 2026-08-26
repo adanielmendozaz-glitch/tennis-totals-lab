@@ -14,6 +14,10 @@ import {
   settleCensoFromMatches
 } from './engine/censo.js';
 
+import {
+  backfillPendingCenso
+} from './engine/censoBackfill.js';
+
 const app = document.querySelector('#app');
 
 let matches = [];
@@ -110,7 +114,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.1</div>
+        <div class="version">ATP + WTA · v0.6.2</div>
       </div>
 
       <button
@@ -3406,6 +3410,36 @@ document.querySelector('#refreshBtn').classList.add('spinning');
     renderMetrics();
     renderMatches();
     renderDataHealth(result.health);
+
+    /*
+     * Liquidación histórica:
+     * corre en segundo plano y
+     * NO bloquea la interfaz.
+     */
+    void backfillPendingCenso()
+      .then(summary => {
+
+        if (
+          summary.changed > 0
+        ) {
+          renderCenso();
+        }
+
+        if (
+          summary.errors?.length
+        ) {
+          console.warn(
+            'Censo Backfill partial',
+            summary.errors
+          );
+        }
+      })
+      .catch(error => {
+        console.warn(
+          'Censo Backfill failure',
+          error
+        );
+      });
 
     void loadPlayerStats(
       result.matches,

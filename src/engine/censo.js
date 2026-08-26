@@ -286,9 +286,17 @@ function totalGames(match) {
     ...(match.playerA?.sets || []),
     ...(match.playerB?.sets || [])
   ]
+    .filter(
+      value =>
+        value !== null &&
+        value !== undefined &&
+        String(value).trim() !== ''
+    )
     .map(Number)
     .filter(
-      Number.isFinite
+      value =>
+        Number.isFinite(value) &&
+        value >= 0
     );
 
   if (!values.length) {
