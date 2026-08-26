@@ -145,7 +145,7 @@ export function captureCenso(
 
   const entry = {
     appVersion:
-      '0.6.4',
+      '0.6.5',
 
     modelVersion:
       match.totals?.version ??
@@ -213,6 +213,96 @@ export function captureCenso(
           ?.pointInTime
           ?.baselineRows ??
         null
+    },
+
+    identityAudit: {
+      playerA: {
+        method:
+          match.playerA
+            ?.identity
+            ?.method ??
+          null,
+
+        confidencePct:
+          match.playerA
+            ?.identity
+            ?.confidencePct ??
+          null,
+
+        canonicalName:
+          match.playerA
+            ?.identity
+            ?.canonicalName ??
+          null,
+
+        sampleType:
+          match.playerA
+            ?.profile
+            ?.sampleType ??
+          null,
+
+        effectiveSample:
+          match.playerA
+            ?.profile
+            ?.effectiveSample ??
+          null,
+
+        modelReady:
+          match.playerA
+            ?.profile
+            ?.modelReady ??
+          null,
+
+        historyMix:
+          match.playerA
+            ?.profile
+            ?.historyMix ??
+          null
+      },
+
+      playerB: {
+        method:
+          match.playerB
+            ?.identity
+            ?.method ??
+          null,
+
+        confidencePct:
+          match.playerB
+            ?.identity
+            ?.confidencePct ??
+          null,
+
+        canonicalName:
+          match.playerB
+            ?.identity
+            ?.canonicalName ??
+          null,
+
+        sampleType:
+          match.playerB
+            ?.profile
+            ?.sampleType ??
+          null,
+
+        effectiveSample:
+          match.playerB
+            ?.profile
+            ?.effectiveSample ??
+          null,
+
+        modelReady:
+          match.playerB
+            ?.profile
+            ?.modelReady ??
+          null,
+
+        historyMix:
+          match.playerB
+            ?.profile
+            ?.historyMix ??
+          null
+      }
     },
 
     id,

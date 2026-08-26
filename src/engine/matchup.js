@@ -81,15 +81,25 @@ function reliability(profile) {
     Math.max(
       0,
       Number(
-        profile.sample || 0
+        profile.effectiveSample ??
+        profile.sample ??
+        0
       )
     );
 
   let value =
     n /
-    (n + 12);
+    (
+      n + 12
+    );
 
   if (
+    profile.sampleType ===
+    'BLEND'
+  ) {
+    value *= 0.90;
+
+  } else if (
     profile.sampleType !==
     'SURFACE'
   ) {
@@ -108,6 +118,47 @@ function reliability(profile) {
     'LOW'
   ) {
     value *= 0.72;
+  }
+
+  /*
+   * Alias/Fuzzy permitidos,
+   * pero nunca reciben la misma
+   * confianza que EXACT.
+   */
+  if (
+    profile.identity?.method ===
+    'ALIAS'
+  ) {
+    value *= 0.98;
+  }
+
+  if (
+    profile.identity?.method ===
+    'FUZZY'
+  ) {
+    value *= 0.94;
+  }
+
+  const extended =
+    Number(
+      profile.historyMix
+        ?.extended ||
+      0
+    );
+
+  const total =
+    extended +
+    Number(
+      profile.historyMix
+        ?.main ||
+      0
+    );
+
+  if (
+    total > 0 &&
+    extended / total > 0.60
+  ) {
+    value *= 0.93;
   }
 
   return Math.max(
@@ -362,23 +413,113 @@ function matchupPlayer(
 }
 
 function profileComplete(profile) {
+  if (!profile) {
+    return false;
+  }
+
+  const statsReady =
+    profile.servePointsWonPct !==
+      null &&
+    profile.servePointsWonPct !==
+      undefined &&
+    profile.returnPointsWonPct !==
+      null &&
+    profile.returnPointsWonPct !==
+      undefined;
+
+  if (
+    typeof profile.modelReady ===
+    'boolean'
+  ) {
+    return (
+      profile.modelReady &&
+      statsReady
+    );
+  }
+
   return Boolean(
-    profile &&
     Number(
       profile.sample || 0
     ) >= 8 &&
-    profile.servePointsWonPct !== null &&
-    profile.servePointsWonPct !== undefined &&
-    profile.returnPointsWonPct !== null &&
-    profile.returnPointsWonPct !== undefined
+    statsReady
   );
 }
 
 function enoughSample(profile) {
-  return (
-    profileComplete(profile) &&
-    Number(profile.sample || 0) >= 8
+  return profileComplete(
+    profile
   );
+}
+
+function playerCoverageReason(
+  player
+) {
+  const profile =
+    player?.profile;
+
+  const identity =
+    player?.identity;
+
+  if (!profile) {
+    if (
+      identity?.status ===
+      'PLACEHOLDER'
+    ) {
+      return 'PLACEHOLDER';
+    }
+
+    if (
+      identity &&
+      !identity.resolved
+    ) {
+      return 'IDENTITY_MISS';
+    }
+
+    return 'NO_PROFILE';
+  }
+
+  if (
+    !profileComplete(
+      profile
+    )
+  ) {
+    return (
+      profile.coverageReason ||
+      'LOW_SAMPLE'
+    );
+  }
+
+  return 'READY';
+}
+
+function coverageAudit(
+  match,
+  baseline
+) {
+  return {
+    playerA:
+      playerCoverageReason(
+        match.playerA
+      ),
+
+    playerB:
+      playerCoverageReason(
+        match.playerB
+      ),
+
+    surface:
+      match.surface ===
+      'UNKNOWN'
+        ? 'SURFACE_UNKNOWN'
+        : 'READY',
+
+    baseline:
+      baseline &&
+      baseline.spw !== null &&
+      baseline.hold !== null
+        ? 'READY'
+        : 'BASELINE_MISSING'
+  };
 }
 
 function classify(
@@ -405,11 +546,9 @@ function classify(
     baseline?.spw !== null &&
     baseline?.hold !== null;
 
-  if (full) {
-    return 'FULL';
-  }
-
-  return 'PARTIAL';
+  return full
+    ? 'FULL'
+    : 'PARTIAL';
 }
 
 function buildMatchup(
@@ -422,14 +561,31 @@ function buildMatchup(
     baseline.hold === null
   ) {
     return {
-      status: 'NO_DATA',
-      markovReady: false,
-      reason: 'BASELINE_MISSING'
+      status:
+        'NO_DATA',
+
+      markovReady:
+        false,
+
+      reason:
+        'BASELINE_MISSING',
+
+      coverageAudit:
+        coverageAudit(
+          match,
+          baseline
+        )
     };
   }
 
   const status =
     classify(
+      match,
+      baseline
+    );
+
+  const audit =
+    coverageAudit(
       match,
       baseline
     );
@@ -460,6 +616,25 @@ function buildMatchup(
 
   return {
     status,
+
+    reason:
+      status === 'FULL'
+        ? 'READY'
+        : (
+            audit.playerA !==
+              'READY'
+              ? audit.playerA
+              : audit.playerB !==
+                  'READY'
+                ? audit.playerB
+                : audit.surface !==
+                    'READY'
+                  ? audit.surface
+                  : audit.baseline
+          ),
+
+    coverageAudit:
+      audit,
 
     markovReady:
       status === 'FULL',

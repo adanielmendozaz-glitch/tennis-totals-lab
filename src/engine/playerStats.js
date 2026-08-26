@@ -1,5 +1,6 @@
 import {
   loadTourHistory,
+  loadTourCoverageHistory,
   normalizeName
 } from '../data/history.js';
 
@@ -12,6 +13,19 @@ import {
   isDateKeyBeforeAsOf,
   filterRowsBeforeAsOf
 } from './pointInTime.js';
+
+import {
+  buildIdentityCatalog,
+  resolvePlayerIdentity
+} from './identity.js';
+
+import {
+  COVERAGE_LIMITS,
+  coverageReadiness,
+  effectiveSampleForMode,
+  historyRowWeight,
+  sourceMix
+} from './coverage.js';
 
 
 const indexCache = new Map();
@@ -165,6 +179,21 @@ function makePlayerRecord(
     oppSecondWon:
       num(
         row[`${opp}_2ndWon`]
+      ),
+
+    historySource:
+      row.__historySource ||
+      'MAIN',
+
+    historyWeight:
+      historyRowWeight(
+        row
+      ),
+
+    tourneyLevel:
+      String(
+        row.tourney_level ||
+        ''
       )
   };
 }
@@ -444,7 +473,7 @@ function eloProfile(
   };
 }
 
-function buildIndex(rows) {
+function buildIndex(rows, eloRows = rows) {
   const players =
     new Map();
 
@@ -510,20 +539,40 @@ function buildIndex(rows) {
     );
   }
 
+  const identityCatalog =
+    buildIdentityCatalog(
+      rows
+    );
+
+  /*
+   * Elo se mantiene MAIN TOUR.
+   * Coverage Extended NO altera el
+   * tercer modelo hasta que LAB lo valide.
+   */
   const elo =
-    buildElo(rows);
+    buildElo(
+      eloRows
+    );
 
   return {
     players,
     tournaments,
+
+    identityCatalog,
+
     elo,
 
     /*
-     * Se conserva la base cruda para
-     * reconstruir Elo a cualquier cutoff.
+     * historyRows:
+     * perfiles + identidad.
+     *
+     * eloRows:
+     * exclusivamente CORE.
      */
     historyRows:
-      rows
+      rows,
+
+    eloRows
   };
 }
 
@@ -541,20 +590,54 @@ async function getIndex(tour) {
   }
 
   const promise =
-    loadTourHistory(
-      upper
-    )
-      .then(rows => {
-        const index =
-          buildIndex(rows);
+    Promise.all([
+      /*
+       * CORE:
+       * Elo y referencia del tour.
+       */
+      loadTourHistory(
+        upper
+      ),
 
-        return {
-          rows:
-            rows.length,
+      /*
+       * COVERAGE:
+       * CORE + qual/chall/125/ITF.
+       */
+      loadTourCoverageHistory(
+        upper
+      )
+    ])
+      .then(
+        ([
+          coreRows,
+          coverageRows
+        ]) => {
+          const index =
+            buildIndex(
+              coverageRows,
+              coreRows
+            );
 
-          ...index
-        };
-      });
+          const extendedRows =
+            coverageRows.filter(
+              row =>
+                row.__historySource ===
+                'EXTENDED'
+            ).length;
+
+          return {
+            rows:
+              coverageRows.length,
+
+            coreRows:
+              coreRows.length,
+
+            extendedRows,
+
+            ...index
+          };
+        }
+      );
 
   indexCache.set(
     upper,
@@ -676,6 +759,18 @@ function aggregate(records) {
   for (const r of records) {
     let used = false;
 
+    const weight =
+      Math.max(
+        0,
+        Math.min(
+          1,
+          Number(
+            r.historyWeight ??
+            1
+          )
+        )
+      );
+
     if (
       r.svGms !== null &&
       r.svGms > 0 &&
@@ -690,14 +785,16 @@ function aggregate(records) {
         );
 
       serviceGames +=
-        r.svGms;
+        r.svGms *
+        weight;
 
       heldGames +=
         Math.max(
           0,
           r.svGms -
           broken
-        );
+        ) *
+        weight;
 
       used = true;
     }
@@ -709,14 +806,16 @@ function aggregate(records) {
       r.oppBpSaved !== null
     ) {
       returnGames +=
-        r.oppSvGms;
+        r.oppSvGms *
+        weight;
 
       breaks +=
         Math.max(
           0,
           r.oppBpFaced -
           r.oppBpSaved
-        );
+        ) *
+        weight;
 
       used = true;
     }
@@ -728,11 +827,15 @@ function aggregate(records) {
       r.secondWon !== null
     ) {
       servePoints +=
-        r.svpt;
+        r.svpt *
+        weight;
 
       servePointsWon +=
-        r.firstWon +
-        r.secondWon;
+        (
+          r.firstWon +
+          r.secondWon
+        ) *
+        weight;
 
       used = true;
     }
@@ -748,20 +851,23 @@ function aggregate(records) {
         r.oppSecondWon;
 
       returnPoints +=
-        r.oppSvpt;
+        r.oppSvpt *
+        weight;
 
       returnPointsWon +=
         Math.max(
           0,
           r.oppSvpt -
           opponentWon
-        );
+        ) *
+        weight;
 
       used = true;
     }
 
     if (used) {
-      usableMatches++;
+      usableMatches +=
+        weight;
     }
   }
 
@@ -814,24 +920,58 @@ function aggregate(records) {
   };
 }
 
+function blendRate(
+  surfaceValue,
+  allValue,
+  weight
+) {
+  if (
+    surfaceValue === null ||
+    surfaceValue === undefined
+  ) {
+    return allValue;
+  }
+
+  if (
+    allValue === null ||
+    allValue === undefined
+  ) {
+    return surfaceValue;
+  }
+
+  return (
+    surfaceValue *
+    weight +
+    allValue *
+    (
+      1 - weight
+    )
+  );
+}
+
 function profile(
-  name,
+  identity,
   surface,
   index,
   asOf,
   eloOverride = null
 ) {
-  const key =
-    normalizeName(name);
+  if (
+    !identity?.resolved ||
+    !identity.canonicalKey
+  ) {
+    return null;
+  }
 
   const source =
-    index.players.get(key) ||
+    index.players.get(
+      identity.canonicalKey
+    ) ||
     [];
 
   /*
    * Point-In-Time:
-   * ni forma, ni ranking, ni saque/resto
-   * pueden mirar el día actual o el futuro.
+   * nada del mismo día ni del futuro.
    */
   const all =
     source.filter(
@@ -846,52 +986,221 @@ function profile(
     return null;
   }
 
+  const allRecent =
+    all.slice(
+      0,
+      24
+    );
+
   const surfaceMatches =
     surface !== 'UNKNOWN'
       ? all.filter(
-          r =>
-            r.surface === surface
+          record =>
+            record.surface ===
+            surface
         )
       : [];
 
-  const useSurface =
-    surfaceMatches.length >= 8;
+  const surfaceRecent =
+    surfaceMatches.slice(
+      0,
+      24
+    );
 
-  const pool =
-    useSurface
-      ? surfaceMatches
-      : all;
+  const allAgg =
+    aggregate(
+      allRecent
+    );
+
+  const surfaceAgg =
+    aggregate(
+      surfaceRecent
+    );
+
+  let sampleType =
+    'ALL';
+
+  if (
+    surface !== 'UNKNOWN' &&
+    surfaceAgg.usableMatches >=
+      COVERAGE_LIMITS
+        .surfaceFull
+  ) {
+    sampleType =
+      'SURFACE';
+
+  } else if (
+    surface !== 'UNKNOWN' &&
+    surfaceAgg.usableMatches >=
+      COVERAGE_LIMITS
+        .surfaceBlend &&
+    allAgg.usableMatches >=
+      COVERAGE_LIMITS
+        .effectiveReady
+  ) {
+    sampleType =
+      'BLEND';
+  }
+
+  let surfaceWeight =
+    0;
+
+  if (
+    sampleType ===
+    'SURFACE'
+  ) {
+    surfaceWeight = 1;
+
+  } else if (
+    sampleType ===
+    'BLEND'
+  ) {
+    surfaceWeight =
+      Math.max(
+        0.35,
+        Math.min(
+          0.76,
+          surfaceAgg.usableMatches /
+          (
+            surfaceAgg.usableMatches +
+            5
+          )
+        )
+      );
+  }
+
+  const choose = key => {
+    if (
+      sampleType ===
+      'SURFACE'
+    ) {
+      return surfaceAgg[key];
+    }
+
+    if (
+      sampleType ===
+      'BLEND'
+    ) {
+      return blendRate(
+        surfaceAgg[key],
+        allAgg[key],
+        surfaceWeight
+      );
+    }
+
+    return allAgg[key];
+  };
 
   const recent =
-    pool.slice(0, 24);
+    sampleType ===
+    'SURFACE'
+      ? surfaceRecent
+      : allRecent;
+
+  const support =
+    sampleType ===
+    'SURFACE'
+      ? surfaceAgg
+      : allAgg;
+
+  const effectiveSample =
+    effectiveSampleForMode(
+      sampleType,
+      surfaceAgg.usableMatches,
+      allAgg.usableMatches
+    );
+
+  const hold =
+    choose('hold');
+
+  const breakRate =
+    choose('break');
+
+  const spw =
+    choose(
+      'servePointsWon'
+    );
+
+  const rpw =
+    choose(
+      'returnPointsWon'
+    );
+
+  const holdPct =
+    percent(hold);
+
+  const breakPct =
+    percent(
+      breakRate
+    );
+
+  const servePointsWonPct =
+    percent(spw);
+
+  const returnPointsWonPct =
+    percent(rpw);
+
+  const gate =
+    coverageReadiness({
+      effectiveSample,
+
+      servePoints:
+        support.servePoints,
+
+      returnPoints:
+        support.returnPoints,
+
+      servePointsWonPct,
+
+      returnPointsWonPct
+    });
 
   const last10 =
-    all.slice(0, 10);
-
-  const agg =
-    aggregate(recent);
+    all.slice(
+      0,
+      10
+    );
 
   const wins =
     last10.filter(
-      r => r.won
+      record =>
+        record.won
     ).length;
 
   const rank =
     all.find(
-      r =>
-        r.rank !== null
-    )?.rank ?? null;
+      record =>
+        record.rank !== null
+    )?.rank ??
+    null;
 
   const rating =
     eloProfile(
-      name,
+      identity.canonicalName,
       surface,
       eloOverride ||
       index.elo
     );
 
+  const mix =
+    sourceMix(
+      recent
+    );
+
   return {
-    name,
+    name:
+      identity.queryName,
+
+    canonicalName:
+      identity.canonicalName,
+
+    identity: {
+      method:
+        identity.method,
+
+      confidencePct:
+        identity.confidencePct
+    },
 
     rank,
 
@@ -900,33 +1209,43 @@ function profile(
     sample:
       recent.length,
 
+    effectiveSample:
+      Math.round(
+        effectiveSample *
+        100
+      ) / 100,
+
     surfaceSample:
-      surfaceMatches.length,
+      surfaceRecent.length,
 
-    sampleType:
-      useSurface
-        ? 'SURFACE'
-        : 'ALL',
+    surfaceEffectiveSample:
+      Math.round(
+        surfaceAgg
+          .usableMatches *
+        100
+      ) / 100,
 
-    holdPct:
-      percent(
-        agg.hold
-      ),
+    sampleType,
 
-    breakPct:
-      percent(
-        agg.break
-      ),
+    surfaceWeightPct:
+      Math.round(
+        surfaceWeight *
+        1000
+      ) / 10,
 
-    servePointsWonPct:
-      percent(
-        agg.servePointsWon
-      ),
+    historyMix:
+      mix,
 
-    returnPointsWonPct:
-      percent(
-        agg.returnPointsWon
-      ),
+    modelReady:
+      gate.ready,
+
+    coverageReason:
+      gate.reason,
+
+    holdPct,
+    breakPct,
+    servePointsWonPct,
+    returnPointsWonPct,
 
     last10Wins:
       wins,
@@ -952,34 +1271,34 @@ function profile(
 
     raw: {
       serviceGames:
-        agg.serviceGames,
+        support.serviceGames,
 
       heldGames:
-        agg.heldGames,
+        support.heldGames,
 
       returnGames:
-        agg.returnGames,
+        support.returnGames,
 
       breaks:
-        agg.breaks,
+        support.breaks,
 
       servePoints:
-        agg.servePoints,
+        support.servePoints,
 
       servePointsWon:
-        agg.servePointsWon,
+        support.servePointsWon,
 
       returnPoints:
-        agg.returnPoints,
+        support.returnPoints,
 
       returnPointsWon:
-        agg.returnPointsWon
+        support.returnPointsWon
     },
 
     confidence:
-      agg.usableMatches >= 15
+      effectiveSample >= 15
         ? 'HIGH'
-        : agg.usableMatches >= 8
+        : effectiveSample >= 8
           ? 'MEDIUM'
           : 'LOW'
   };
@@ -1015,6 +1334,46 @@ export async function enrichMatchesWithStats(
   let surfaceAliasMatches = 0;
   let surfaceFuzzyMatches = 0;
   let surfaceUnknownMatches = 0;
+
+  let identityExact = 0;
+  let identityAlias = 0;
+  let identityFuzzy = 0;
+  let identityUnresolved = 0;
+  let identityAmbiguous = 0;
+  let identityPlaceholder = 0;
+
+  let modelReadyPlayers = 0;
+  let extendedSupportedProfiles = 0;
+
+  function countIdentity(identity) {
+    switch (
+      identity?.status
+    ) {
+      case 'EXACT':
+        identityExact++;
+        break;
+
+      case 'ALIAS':
+        identityAlias++;
+        break;
+
+      case 'FUZZY':
+        identityFuzzy++;
+        break;
+
+      case 'AMBIGUOUS':
+        identityAmbiguous++;
+        break;
+
+      case 'PLACEHOLDER':
+        identityPlaceholder++;
+        break;
+
+      default:
+        identityUnresolved++;
+        break;
+    }
+  }
 
   /*
    * Elo es reconstruido por tour + cutoff.
@@ -1083,7 +1442,7 @@ export async function enrichMatchesWithStats(
       if (!pitElo) {
         const eligibleRows =
           filterRowsBeforeAsOf(
-            index.historyRows,
+            index.eloRows,
             cutoffKey
           );
 
@@ -1106,7 +1465,7 @@ export async function enrichMatchesWithStats(
             cutoffKey,
 
             totalRows:
-              index.historyRows.length,
+              index.eloRows.length,
 
             eligibleRows:
               eligibleRows.length,
@@ -1114,7 +1473,7 @@ export async function enrichMatchesWithStats(
             excludedRows:
               Math.max(
                 0,
-                index.historyRows.length -
+                index.eloRows.length -
                 eligibleRows.length
               )
           }
@@ -1163,9 +1522,29 @@ export async function enrichMatchesWithStats(
         surfaceUnknownMatches++;
       }
 
+      const identityA =
+        resolvePlayerIdentity(
+          match.playerA.name,
+          index.identityCatalog
+        );
+
+      const identityB =
+        resolvePlayerIdentity(
+          match.playerB.name,
+          index.identityCatalog
+        );
+
+      countIdentity(
+        identityA
+      );
+
+      countIdentity(
+        identityB
+      );
+
       const profileA =
         profile(
-          match.playerA.name,
+          identityA,
           surface,
           index,
           cutoffKey,
@@ -1174,7 +1553,7 @@ export async function enrichMatchesWithStats(
 
       const profileB =
         profile(
-          match.playerB.name,
+          identityB,
           surface,
           index,
           cutoffKey,
@@ -1182,6 +1561,34 @@ export async function enrichMatchesWithStats(
         );
 
       totalPlayers += 2;
+
+      if (
+        profileA?.modelReady
+      ) {
+        modelReadyPlayers++;
+      }
+
+      if (
+        profileB?.modelReady
+      ) {
+        modelReadyPlayers++;
+      }
+
+      if (
+        profileA
+          ?.historyMix
+          ?.extended > 0
+      ) {
+        extendedSupportedProfiles++;
+      }
+
+      if (
+        profileB
+          ?.historyMix
+          ?.extended > 0
+      ) {
+        extendedSupportedProfiles++;
+      }
 
       if (profileA) {
         foundPlayers++;
@@ -1226,12 +1633,22 @@ export async function enrichMatchesWithStats(
 
         playerA: {
           ...match.playerA,
-          profile: profileA
+
+          identity:
+            identityA,
+
+          profile:
+            profileA
         },
 
         playerB: {
           ...match.playerB,
-          profile: profileB
+
+          identity:
+            identityB,
+
+          profile:
+            profileB
         }
       };
     });
@@ -1267,11 +1684,33 @@ export async function enrichMatchesWithStats(
       surfaceFuzzyMatches,
       surfaceUnknownMatches,
 
+      identityExact,
+      identityAlias,
+      identityFuzzy,
+      identityUnresolved,
+      identityAmbiguous,
+      identityPlaceholder,
+
+      modelReadyPlayers,
+      extendedSupportedProfiles,
+
       atpRows:
         atp.rows,
 
       wtaRows:
         wta.rows,
+
+      atpCoreRows:
+        atp.coreRows,
+
+      wtaCoreRows:
+        wta.coreRows,
+
+      atpExtendedRows:
+        atp.extendedRows,
+
+      wtaExtendedRows:
+        wta.extendedRows,
 
       atpPlayers:
         atp.players.size,

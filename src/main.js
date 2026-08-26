@@ -115,7 +115,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.4</div>
+        <div class="version">ATP + WTA · v0.6.5</div>
       </div>
 
       <button
@@ -626,15 +626,55 @@ function profileLine(player) {
     player.profile;
 
   if (!p) {
+    const identity =
+      player.identity;
+
+    let message =
+      'SIN PERFIL HISTÓRICO';
+
+    if (
+      identity?.status ===
+      'PLACEHOLDER'
+    ) {
+      message =
+        'SIN IDENTIDAD · PLACEHOLDER';
+
+    } else if (
+      identity &&
+      !identity.resolved
+    ) {
+      message =
+        identity.status ===
+        'AMBIGUOUS'
+          ? 'IDENTIDAD AMBIGUA · NO FORZADA'
+          : 'IDENTITY MISS · NO FORZADO';
+    }
+
     return `
       <div class="profile-line missing">
         <div class="profile-id">
           <strong>${player.shortName || player.name}</strong>
-          <span>SIN PERFIL HISTÓRICO</span>
+          <span>${message}</span>
         </div>
       </div>
     `;
   }
+
+  const identityTag =
+    p.identity?.method &&
+    p.identity.method !==
+      'EXACT'
+      ? ` · ID ${p.identity.method} ${p.identity.confidencePct}%`
+      : '';
+
+  const extTag =
+    Number(
+      p.historyMix
+        ?.extended ||
+      0
+    ) > 0
+      ? ` · EXT ${p.historyMix.extended}`
+      : '';
 
   return `
     <div class="profile-line">
@@ -645,7 +685,10 @@ function profileLine(player) {
           ${p.rank ? `#${p.rank} · ` : ''}
           ${p.sampleType}
           · n=${p.sample}
+          · eff=${Number(p.effectiveSample ?? p.sample).toFixed(1)}
           · L10 ${p.last10Wins}-${p.last10Losses}
+          ${identityTag}
+          ${extTag}
         </span>
       </div>
 
@@ -721,6 +764,51 @@ function signedPct(value) {
   }
 
   return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+}
+
+function coverageReasonLabel(
+  value
+) {
+  const labels = {
+    READY:
+      'READY',
+
+    IDENTITY_MISS:
+      'IDENTITY MISS',
+
+    PLACEHOLDER:
+      'SIN IDENTIDAD',
+
+    NO_PROFILE:
+      'SIN PERFIL',
+
+    LOW_EFFECTIVE_SAMPLE:
+      'MUESTRA EFECTIVA BAJA',
+
+    LOW_SAMPLE:
+      'MUESTRA BAJA',
+
+    SERVE_SUPPORT_LOW:
+      'POCOS PUNTOS DE SAQUE',
+
+    RETURN_SUPPORT_LOW:
+      'POCOS PUNTOS DE RESTO',
+
+    STAT_GAP:
+      'STATS INCOMPLETOS',
+
+    SURFACE_UNKNOWN:
+      'SUPERFICIE DESCONOCIDA',
+
+    BASELINE_MISSING:
+      'BASELINE FALTANTE'
+  };
+
+  return (
+    labels[value] ||
+    value ||
+    '—'
+  );
 }
 
 function matchupPlayerLine(
@@ -815,6 +903,39 @@ function matchupPanel(match) {
         match.playerB,
         m.playerB
       )}
+
+      ${
+        m.status !== 'FULL' &&
+        m.coverageAudit
+          ? `
+            <div class="coverage-audit">
+              <strong>
+                COVERAGE DIAGNOSTIC
+              </strong>
+
+              <span>
+                ${match.playerA.shortName || match.playerA.name}:
+                ${coverageReasonLabel(m.coverageAudit.playerA)}
+              </span>
+
+              <span>
+                ${match.playerB.shortName || match.playerB.name}:
+                ${coverageReasonLabel(m.coverageAudit.playerB)}
+              </span>
+
+              ${
+                m.coverageAudit.surface !== 'READY'
+                  ? `
+                    <span>
+                      ${coverageReasonLabel(m.coverageAudit.surface)}
+                    </span>
+                  `
+                  : ''
+              }
+            </div>
+          `
+          : ''
+      }
 
       <div class="matchup-baseline">
         <span>
@@ -3062,17 +3183,20 @@ function renderPlayerDataLoading() {
 
 function renderPlayerData(coverage) {
   const badge =
-    document.querySelector('#playerDataBadge');
+    document.querySelector(
+      '#playerDataBadge'
+    );
 
   const pct =
     Number(
-      coverage.percentage || 0
+      coverage.percentage ||
+      0
     );
 
   const quality =
-    pct >= 80
+    pct >= 88
       ? 'good'
-      : pct >= 60
+      : pct >= 70
         ? 'partial'
         : 'low';
 
@@ -3086,8 +3210,8 @@ function renderPlayerData(coverage) {
     '#playerDataTitle'
   ).textContent =
     coverage.pointInTime
-      ? 'Perfiles point-in-time cargados'
-      : 'Perfiles estadísticos cargados';
+      ? 'Coverage + Identity point-in-time'
+      : 'Coverage + Identity';
 
   document.querySelector(
     '#playerCoverage'
@@ -3108,9 +3232,55 @@ function renderPlayerData(coverage) {
     '#historyRows'
   ).textContent =
     (
-      Number(coverage.atpRows || 0) +
-      Number(coverage.wtaRows || 0)
+      Number(
+        coverage.atpRows ||
+        0
+      ) +
+      Number(
+        coverage.wtaRows ||
+        0
+      )
     ).toLocaleString();
+
+  const resolvedByAlias =
+    Number(
+      coverage.identityAlias ||
+      0
+    ) +
+    Number(
+      coverage.identityFuzzy ||
+      0
+    );
+
+  const unresolved =
+    Number(
+      coverage.identityUnresolved ||
+      0
+    ) +
+    Number(
+      coverage.identityAmbiguous ||
+      0
+    );
+
+  const extendedRows =
+    Number(
+      coverage.atpExtendedRows ||
+      0
+    ) +
+    Number(
+      coverage.wtaExtendedRows ||
+      0
+    );
+
+  const coreRows =
+    Number(
+      coverage.atpCoreRows ||
+      0
+    ) +
+    Number(
+      coverage.wtaCoreRows ||
+      0
+    );
 
   document.querySelector(
     '#playerDataDetail'
@@ -3131,7 +3301,30 @@ function renderPlayerData(coverage) {
     </span>
 
     <span>
-      Base:
+      ID:
+      exact <strong>${coverage.identityExact || 0}</strong>
+      · alias/fuzzy <strong>${resolvedByAlias}</strong>
+      · miss <strong>${unresolved}</strong>
+    </span>
+
+    <span>
+      Model-ready players:
+      <strong>${coverage.modelReadyPlayers || 0}/${coverage.totalPlayers}</strong>
+    </span>
+
+    <span>
+      Perfiles con soporte EXT:
+      <strong>${coverage.extendedSupportedProfiles || 0}</strong>
+    </span>
+
+    <span>
+      Históricos:
+      CORE <strong>${coreRows.toLocaleString()}</strong>
+      · EXT <strong>${extendedRows.toLocaleString()}</strong>
+    </span>
+
+    <span>
+      Base IDs:
       ATP ${coverage.atpPlayers}
       · WTA ${coverage.wtaPlayers}
     </span>

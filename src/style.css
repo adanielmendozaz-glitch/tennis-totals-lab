@@ -2334,3 +2334,35 @@ body.detail-open {
     flex-direction: column;
   }
 }
+
+
+/* ========================================================
+   v0.6.5 Coverage & Identity Engine
+   ======================================================== */
+
+.coverage-audit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 12px 20px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  background: rgba(85, 58, 14, .12);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.coverage-audit > strong {
+  width: 100%;
+  color: rgba(117, 238, 174, .88);
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
+.coverage-audit > span {
+  color: rgba(235, 240, 237, .68);
+}
+
+.profile-line.missing .profile-id span {
+  max-width: 280px;
+}
+
