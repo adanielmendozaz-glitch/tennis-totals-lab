@@ -506,12 +506,18 @@ function buildMatchup(
 export async function enrichMatchesWithMatchup(
   matches
 ) {
-  const baselineCache =
-    new Map();
+  const [
+    atp,
+    wta
+  ] =
+    await Promise.all([
+      getTourBaselines('ATP'),
+      getTourBaselines('WTA')
+    ]);
 
-  const representative = {
-    ATP: null,
-    WTA: null
+  const baselineSets = {
+    ATP: atp,
+    WTA: wta
   };
 
   let full = 0;
@@ -519,142 +525,52 @@ export async function enrichMatchesWithMatchup(
   let noData = 0;
   let markovReady = 0;
 
-  const enriched = [];
+  const enriched =
+    matches.map(match => {
 
-  for (const match of matches) {
-    const cutoffKey =
-      match.pointInTime
-        ?.cutoffKey ||
-      null;
+      const baselineSet =
+        baselineSets[
+          match.tour
+        ];
 
-    const cacheKey =
-      `${match.tour}:${cutoffKey || 'INVALID'}`;
-
-    let baselineSet =
-      baselineCache.get(
-        cacheKey
-      );
-
-    if (!baselineSet) {
-      baselineSet =
-        await getTourBaselines(
-          match.tour,
-          cutoffKey
+      const baseline =
+        selectBaseline(
+          baselineSet,
+          match.surface
         );
 
-      baselineCache.set(
-        cacheKey,
-        baselineSet
-      );
-    }
+      const matchup =
+        buildMatchup(
+          match,
+          baseline
+        );
 
-    if (
-      !representative[
-        match.tour
-      ]
-    ) {
-      representative[
-        match.tour
-      ] = baselineSet;
-    }
+      if (
+        matchup.status === 'FULL'
+      ) {
+        full++;
+      } else if (
+        matchup.status === 'PARTIAL'
+      ) {
+        partial++;
+      } else {
+        noData++;
+      }
 
-    const baseline =
-      selectBaseline(
-        baselineSet,
-        match.surface
-      );
+      if (
+        matchup.markovReady
+      ) {
+        markovReady++;
+      }
 
-    const matchup =
-      buildMatchup(
-        match,
-        baseline
-      );
-
-    matchup.pointInTime = {
-      status:
-        cutoffKey
-          ? 'ACTIVE'
-          : 'INVALID_CUTOFF',
-
-      cutoffKey,
-
-      baselineRows:
-        baselineSet?.rows ?? 0,
-
-      strictBefore:
-        true,
-
-      sameDayExcluded:
-        true
-    };
-
-    if (
-      matchup.status === 'FULL'
-    ) {
-      full++;
-    } else if (
-      matchup.status === 'PARTIAL'
-    ) {
-      partial++;
-    } else {
-      noData++;
-    }
-
-    if (
-      matchup.markovReady
-    ) {
-      markovReady++;
-    }
-
-    enriched.push({
-      ...match,
-      matchup
+      return {
+        ...match,
+        matchup
+      };
     });
-  }
-
-  function summaryTour(
-    baselineSet
-  ) {
-    return {
-      all:
-        baselineSet
-          ?.surfaces
-          ?.ALL ||
-        null,
-
-      hard:
-        baselineSet
-          ?.surfaces
-          ?.HARD ||
-        null,
-
-      clay:
-        baselineSet
-          ?.surfaces
-          ?.CLAY ||
-        null,
-
-      grass:
-        baselineSet
-          ?.surfaces
-          ?.GRASS ||
-        null,
-
-      cutoffKey:
-        baselineSet
-          ?.asOfKey ||
-        null,
-
-      rows:
-        baselineSet
-          ?.rows ||
-        0
-    };
-  }
 
   return {
-    matches:
-      enriched,
+    matches: enriched,
 
     summary: {
       total:
@@ -665,19 +581,33 @@ export async function enrichMatchesWithMatchup(
       noData,
       markovReady,
 
-      pointInTime:
-        true,
+      atp: {
+        all:
+          atp.surfaces.ALL,
 
-      atp:
-        summaryTour(
-          representative.ATP
-        ),
+        hard:
+          atp.surfaces.HARD,
 
-      wta:
-        summaryTour(
-          representative.WTA
-        )
+        clay:
+          atp.surfaces.CLAY,
+
+        grass:
+          atp.surfaces.GRASS
+      },
+
+      wta: {
+        all:
+          wta.surfaces.ALL,
+
+        hard:
+          wta.surfaces.HARD,
+
+        clay:
+          wta.surfaces.CLAY,
+
+        grass:
+          wta.surfaces.GRASS
+      }
     }
   };
 }
-

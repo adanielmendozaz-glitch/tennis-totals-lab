@@ -2,12 +2,6 @@ import {
   loadTourHistory
 } from '../data/history.js';
 
-import {
-  asOfDateKey,
-  filterRowsBeforeAsOf
-} from './pointInTime.js';
-
-
 const cache = new Map();
 
 function num(value) {
@@ -249,26 +243,17 @@ function buildBaselines(rows) {
 }
 
 export async function getTourBaselines(
-  tour,
-  asOf
+  tour
 ) {
   const upper =
     String(tour)
       .toUpperCase();
 
-  const cutoffKey =
-    asOfDateKey(
-      asOf
-    );
-
-  const key =
-    `${upper}:${cutoffKey || 'INVALID'}`;
-
   if (
-    cache.has(key)
+    cache.has(upper)
   ) {
     return cache.get(
-      key
+      upper
     );
   }
 
@@ -276,46 +261,15 @@ export async function getTourBaselines(
     loadTourHistory(
       upper
     )
-      .then(rows => {
-        const eligibleRows =
-          cutoffKey
-            ? filterRowsBeforeAsOf(
-                rows,
-                cutoffKey
-              )
-            : [];
-
-        return {
-          tour:
-            upper,
-
-          rows:
-            eligibleRows.length,
-
-          sourceRows:
-            rows.length,
-
-          asOfKey:
-            cutoffKey,
-
-          pointInTime:
-            true,
-
-          strictBefore:
-            true,
-
-          sameDayExcluded:
-            true,
-
-          surfaces:
-            buildBaselines(
-              eligibleRows
-            )
-        };
-      });
+      .then(rows => ({
+        tour: upper,
+        rows: rows.length,
+        surfaces:
+          buildBaselines(rows)
+      }));
 
   cache.set(
-    key,
+    upper,
     promise
   );
 

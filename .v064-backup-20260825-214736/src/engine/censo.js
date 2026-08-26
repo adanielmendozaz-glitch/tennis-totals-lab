@@ -145,7 +145,7 @@ export function captureCenso(
 
   const entry = {
     appVersion:
-      '0.6.4',
+      '0.6.3',
 
     modelVersion:
       match.totals?.version ??
@@ -186,34 +186,6 @@ export function captureCenso(
     marketObservedAt:
       match.marketObservedAt ??
       null,
-
-    pointInTimeAudit: {
-      status:
-        match.pointInTime
-          ?.status ??
-        null,
-
-      cutoffKey:
-        match.pointInTime
-          ?.cutoffKey ??
-        null,
-
-      strictBefore:
-        match.pointInTime
-          ?.strictBefore ??
-        null,
-
-      sameDayExcluded:
-        match.pointInTime
-          ?.sameDayExcluded ??
-        null,
-
-      baselineRows:
-        match.matchup
-          ?.pointInTime
-          ?.baselineRows ??
-        null
-    },
 
     id,
     matchId: id,

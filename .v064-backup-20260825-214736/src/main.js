@@ -115,7 +115,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.4</div>
+        <div class="version">ATP + WTA · v0.6.3</div>
       </div>
 
       <button
@@ -850,13 +850,6 @@ function totalsFingerprint(match) {
     match.tournament,
     match.round,
     match.surface,
-
-    /*
-     * Evita reutilizar una simulación
-     * calculada con otro corte histórico.
-     */
-    match.pointInTime?.cutoffKey,
-
     match.matchup?.playerA?.servePointPct,
     match.matchup?.playerB?.servePointPct,
     match.matchup?.playerA?.holdPct,
@@ -3004,19 +2997,6 @@ function renderMatchupData(summary) {
       SPW <strong>${pctText(wtaHard?.spw)}</strong>
       · HOLD <strong>${pctText(wtaHard?.hold)}</strong>
     </span>
-
-    ${
-      summary.pointInTime
-        ? `
-          <span>
-            POINT-IN-TIME
-            <strong>STRICT</strong>
-            · ATP ${summary.atp?.cutoffKey || '—'}
-            · WTA ${summary.wta?.cutoffKey || '—'}
-          </span>
-        `
-        : ''
-    }
   `;
 }
 
@@ -3085,9 +3065,7 @@ function renderPlayerData(coverage) {
   document.querySelector(
     '#playerDataTitle'
   ).textContent =
-    coverage.pointInTime
-      ? 'Perfiles point-in-time cargados'
-      : 'Perfiles estadísticos cargados';
+    'Perfiles estadísticos cargados';
 
   document.querySelector(
     '#playerCoverage'
@@ -3135,19 +3113,6 @@ function renderPlayerData(coverage) {
       ATP ${coverage.atpPlayers}
       · WTA ${coverage.wtaPlayers}
     </span>
-
-    ${
-      coverage.pointInTime
-        ? `
-          <span>
-            PIT:
-            <strong>ACTIVO</strong>
-            · cutoff ${coverage.cutoffs?.join(', ') || '—'}
-            · mismo día excluido
-          </span>
-        `
-        : ''
-    }
   `;
 }
 

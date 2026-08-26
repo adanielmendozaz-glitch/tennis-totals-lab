@@ -7,13 +7,6 @@ import {
   resolveSurface
 } from './surfaceResolver.js';
 
-import {
-  asOfDateKey,
-  isDateKeyBeforeAsOf,
-  filterRowsBeforeAsOf
-} from './pointInTime.js';
-
-
 const indexCache = new Map();
 
 function num(value) {
@@ -516,14 +509,7 @@ function buildIndex(rows) {
   return {
     players,
     tournaments,
-    elo,
-
-    /*
-     * Se conserva la base cruda para
-     * reconstruir Elo a cualquier cutoff.
-     */
-    historyRows:
-      rows
+    elo
   };
 }
 
@@ -817,30 +803,14 @@ function aggregate(records) {
 function profile(
   name,
   surface,
-  index,
-  asOf,
-  eloOverride = null
+  index
 ) {
   const key =
     normalizeName(name);
 
-  const source =
+  const all =
     index.players.get(key) ||
     [];
-
-  /*
-   * Point-In-Time:
-   * ni forma, ni ranking, ni saque/resto
-   * pueden mirar el día actual o el futuro.
-   */
-  const all =
-    source.filter(
-      record =>
-        isDateKeyBeforeAsOf(
-          record.date,
-          asOf
-        )
-    );
 
   if (!all.length) {
     return null;
@@ -886,7 +856,6 @@ function profile(
     eloProfile(
       name,
       surface,
-      eloOverride ||
       index.elo
     );
 
@@ -1016,20 +985,6 @@ export async function enrichMatchesWithStats(
   let surfaceFuzzyMatches = 0;
   let surfaceUnknownMatches = 0;
 
-  /*
-   * Elo es reconstruido por tour + cutoff.
-   * En la cartelera diaria normalmente son
-   * solo dos reconstrucciones: ATP y WTA.
-   */
-  const eloByCutoff =
-    new Map();
-
-  const pitCutoffs =
-    new Set();
-
-  const pitAudits =
-    new Map();
-
   const enriched =
     matches.map(match => {
 
@@ -1038,87 +993,6 @@ export async function enrichMatchesWithStats(
 
       if (!index) {
         return match;
-      }
-
-      const asOf =
-        match.date;
-
-      const cutoffKey =
-        asOfDateKey(
-          asOf
-        );
-
-      if (!cutoffKey) {
-        return {
-          ...match,
-
-          pointInTime: {
-            status:
-              'INVALID_CUTOFF',
-
-            cutoffKey:
-              null,
-
-            strictBefore:
-              true,
-
-            sameDayExcluded:
-              true
-          }
-        };
-      }
-
-      pitCutoffs.add(
-        cutoffKey
-      );
-
-      const eloKey =
-        `${match.tour}:${cutoffKey}`;
-
-      let pitElo =
-        eloByCutoff.get(
-          eloKey
-        );
-
-      if (!pitElo) {
-        const eligibleRows =
-          filterRowsBeforeAsOf(
-            index.historyRows,
-            cutoffKey
-          );
-
-        pitElo =
-          buildElo(
-            eligibleRows
-          );
-
-        eloByCutoff.set(
-          eloKey,
-          pitElo
-        );
-
-        pitAudits.set(
-          eloKey,
-          {
-            tour:
-              match.tour,
-
-            cutoffKey,
-
-            totalRows:
-              index.historyRows.length,
-
-            eligibleRows:
-              eligibleRows.length,
-
-            excludedRows:
-              Math.max(
-                0,
-                index.historyRows.length -
-                eligibleRows.length
-              )
-          }
-        );
       }
 
       const surfaceMeta =
@@ -1167,18 +1041,14 @@ export async function enrichMatchesWithStats(
         profile(
           match.playerA.name,
           surface,
-          index,
-          cutoffKey,
-          pitElo
+          index
         );
 
       const profileB =
         profile(
           match.playerB.name,
           surface,
-          index,
-          cutoffKey,
-          pitElo
+          index
         );
 
       totalPlayers += 2;
@@ -1207,19 +1077,6 @@ export async function enrichMatchesWithStats(
 
       return {
         ...match,
-
-        pointInTime: {
-          status:
-            'ACTIVE',
-
-          cutoffKey,
-
-          strictBefore:
-            true,
-
-          sameDayExcluded:
-            true
-        },
 
         surface,
         surfaceMeta,
@@ -1277,29 +1134,7 @@ export async function enrichMatchesWithStats(
         atp.players.size,
 
       wtaPlayers:
-        wta.players.size,
-
-      pointInTime:
-        true,
-
-      strictBefore:
-        true,
-
-      sameDayExcluded:
-        true,
-
-      cutoffCount:
-        pitCutoffs.size,
-
-      cutoffs:
-        [
-          ...pitCutoffs
-        ].sort(),
-
-      pitAudit:
-        [
-          ...pitAudits.values()
-        ]
+        wta.players.size
     }
   };
 }
