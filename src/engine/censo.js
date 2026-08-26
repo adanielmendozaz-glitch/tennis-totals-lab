@@ -310,6 +310,23 @@ export function captureCenso(
       match
     );
 
+  if (!readiness.eligible) {
+    return {
+      ok: false,
+      reason: 'READINESS_GATE'
+    };
+  }
+
+  if (
+    decision.audit
+      ?.biasGuardBlocked
+  ) {
+    return {
+      ok: false,
+      reason: 'BIAS_GUARD'
+    };
+  }
+
   const price =
     selectedOdds(
       decision
@@ -317,7 +334,7 @@ export function captureCenso(
 
   const entry = {
     appVersion:
-      '0.6.7',
+      '0.6.8.1',
 
     modelVersion:
       match.totals?.version ??
@@ -589,6 +606,89 @@ export function captureCenso(
       match.totals
         ?.expectedGames ??
       null,
+
+    directionBiasAudit: {
+      expectedMarketDeltaGames:
+        decision.audit
+          ?.expectedMarketDeltaGames ??
+        null,
+
+      absExpectedMarketDeltaGames:
+        decision.audit
+          ?.absExpectedMarketDeltaGames ??
+        null,
+
+      biasGuardStatus:
+        decision.audit
+          ?.biasGuardStatus ??
+        null,
+
+      structuralFamilyExpected:
+        match.totals
+          ?.diagnostics
+          ?.structuralFamilyExpected ??
+        null,
+
+      familyGap:
+        match.totals
+          ?.diagnostics
+          ?.familyGap ??
+        null
+    },
+
+    holdAudit: {
+      playerA: {
+        finalHoldPct:
+          match.matchup
+            ?.playerA
+            ?.holdPct ??
+          null,
+
+        pointHoldPct:
+          match.matchup
+            ?.playerA
+            ?.pointHoldPct ??
+          null,
+
+        gameCrossCheckPct:
+          match.matchup
+            ?.playerA
+            ?.gameCrossCheckPct ??
+          null,
+
+        correctionPct:
+          match.matchup
+            ?.playerA
+            ?.holdCorrectionPct ??
+          null
+      },
+
+      playerB: {
+        finalHoldPct:
+          match.matchup
+            ?.playerB
+            ?.holdPct ??
+          null,
+
+        pointHoldPct:
+          match.matchup
+            ?.playerB
+            ?.pointHoldPct ??
+          null,
+
+        gameCrossCheckPct:
+          match.matchup
+            ?.playerB
+            ?.gameCrossCheckPct ??
+          null,
+
+        correctionPct:
+          match.matchup
+            ?.playerB
+            ?.holdCorrectionPct ??
+          null
+      }
+    },
 
     models: {
       markov:

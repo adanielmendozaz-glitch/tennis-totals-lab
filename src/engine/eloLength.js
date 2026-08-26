@@ -59,8 +59,43 @@ export function simulateEloTotals(
       300
     );
 
+  const matchesA =
+    Number(
+      match.playerA
+        ?.profile
+        ?.eloMatches || 0
+    );
+
+  const matchesB =
+    Number(
+      match.playerB
+        ?.profile
+        ?.eloMatches || 0
+    );
+
+  const eloEvidence =
+    clamp(
+      Math.min(
+        matchesA,
+        matchesB
+      ) / 30,
+      0,
+      1
+    );
+
+  /*
+   * Antes: 1.4pp máximo fijo.
+   * Ahora: ~1.0pp con poca evidencia
+   * hasta ~2.0pp con 30+ partidos CORE.
+   * Esto distingue mejor favoritos reales.
+   */
+  const maxShift =
+    0.010 +
+    0.010 *
+    eloEvidence;
+
   const shift =
-    0.014 *
+    maxShift *
     eloSignal;
 
   const baseServeA =
@@ -151,7 +186,16 @@ export function simulateEloTotals(
         eloDiff,
 
       serveShiftPct:
-        shift * 100
+        shift * 100,
+
+      evidencePct:
+        eloEvidence * 100,
+
+      matchesA,
+      matchesB,
+
+      maxShiftPct:
+        maxShift * 100
     }
   };
 }

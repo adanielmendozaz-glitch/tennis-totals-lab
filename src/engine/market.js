@@ -1,3 +1,7 @@
+import {
+  getMarketReadiness
+} from './readiness.js';
+
 function clamp(value, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value));
 }
@@ -233,6 +237,71 @@ function probabilityAtLine(
   return null;
 }
 
+/*
+ * Protección simétrica mientras LAB acumula
+ * suficiente backtest/calibración.
+ *
+ * Una diferencia extrema Expected vs línea
+ * se audita y se bloquea; no se convierte
+ * automáticamente en PLAY.
+ */
+export function marketBiasGuard(
+  expectedGames,
+  marketLine,
+  threshold = 3.25
+) {
+  const expected =
+    Number(expectedGames);
+
+  const line =
+    Number(marketLine);
+
+  if (
+    !Number.isFinite(expected) ||
+    !Number.isFinite(line)
+  ) {
+    return {
+      blocked: true,
+      status: 'INVALID',
+      deltaGames: null,
+      absDeltaGames: null,
+      threshold
+    };
+  }
+
+  const deltaGames =
+    expected - line;
+
+  const absDeltaGames =
+    Math.abs(deltaGames);
+
+  return {
+    blocked:
+      absDeltaGames >
+      threshold,
+
+    status:
+      absDeltaGames >
+      threshold
+        ? 'BLOCK'
+        : absDeltaGames >= 2.25
+          ? 'WATCH'
+          : 'OK',
+
+    deltaGames:
+      Math.round(
+        deltaGames * 100
+      ) / 100,
+
+    absDeltaGames:
+      Math.round(
+        absDeltaGames * 100
+      ) / 100,
+
+    threshold
+  };
+}
+
 function classification({
   eligible,
   probability,
@@ -292,11 +361,33 @@ export function evaluateMarket(
         ?.qualityPct || 0
     );
 
+  const readiness =
+    getMarketReadiness(
+      match
+    );
+
+  const shadow =
+    match.totals
+      ?.shadowAudit;
+
+  const shadowBlocked =
+    Boolean(
+      shadow?.available &&
+      shadow.status ===
+        'CAUTION'
+    );
+
+  const biasGuard =
+    marketBiasGuard(
+      match.totals
+        ?.expectedGames,
+      market.line
+    );
+
   const eligible =
-    match.state === 'pre' &&
-    match.matchup?.markovReady &&
-    consensus === 'STABLE' &&
-    quality >= 72;
+    readiness.eligible &&
+    !shadowBlocked &&
+    !biasGuard.blocked;
 
   const overPrice =
     parseOdds(
@@ -470,15 +561,40 @@ export function evaluateMarket(
     recommendation,
     eligible,
 
+    audit: {
+      readinessScore:
+        readiness.score,
+
+      readinessStatus:
+        readiness.status,
+
+      shadowStatus:
+        shadow?.available
+          ? shadow.status
+          : 'UNAVAILABLE',
+
+      expectedMarketDeltaGames:
+        biasGuard.deltaGames,
+
+      absExpectedMarketDeltaGames:
+        biasGuard.absDeltaGames,
+
+      biasGuardStatus:
+        biasGuard.status,
+
+      biasGuardBlocked:
+        biasGuard.blocked
+    },
+
     reason:
       !eligible
         ? (
-            match.state !== 'pre'
-              ? 'LIVE_OR_FINAL'
-              : consensus !== 'STABLE'
-                ? 'CONSENSUS_NOT_STABLE'
-                : quality < 72
-                  ? 'LOW_QUALITY'
+            !readiness.eligible
+              ? `READINESS_${readiness.reason}`
+              : shadowBlocked
+                ? 'SHADOW_CAUTION'
+                : biasGuard.blocked
+                  ? 'MODEL_MARKET_GAP'
                   : 'DATA_GATE'
           )
         : bestSide === null

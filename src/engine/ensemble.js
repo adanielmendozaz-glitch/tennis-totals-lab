@@ -10,10 +10,26 @@ import {
   simulateEloTotals
 } from './eloLength.js';
 
-const BASE_WEIGHTS = {
-  structural: 0.45,
-  bayesian: 0.35,
-  elo: 0.20
+/*
+ * v0.6.8.1 ENSEMBLE DE-CORRELATION
+ *
+ * Markov y Elo pertenecen a una misma familia.
+ * Ya no forman una mayoría artificial 2-vs-1
+ * contra Bayes.
+ *
+ * Pesos efectivos:
+ * Markov 45%
+ * Bayes  40%
+ * Elo    15%
+ */
+const FAMILY_WEIGHTS = {
+  structuralFamily: 0.60,
+  bayesian: 0.40
+};
+
+const STRUCTURAL_MIX = {
+  markov: 0.75,
+  elo: 0.25
 };
 
 function clamp(
@@ -156,14 +172,22 @@ function qualityScore(match) {
     Number(
       match.playerA
         ?.profile
-        ?.sample || 0
+        ?.effectiveSample ??
+      match.playerA
+        ?.profile
+        ?.sample ??
+      0
     );
 
   const sampleB =
     Number(
       match.playerB
         ?.profile
-        ?.sample || 0
+        ?.effectiveSample ??
+      match.playerB
+        ?.profile
+        ?.sample ??
+      0
     );
 
   const minimumSample =
@@ -230,108 +254,47 @@ function qualityScore(match) {
   );
 }
 
-function median3(
-  a,
-  b,
-  c
-) {
-  return [
-    a,
-    b,
-    c
-  ]
-    .sort(
-      (x, y) =>
-        x - y
-    )[1];
-}
-
-function robustWeights(
+export function decorrelatedWeights(
   structural,
   bayesian,
   elo
 ) {
-  const expected = {
-    structural:
-      structural.expectedGames,
-
-    bayesian:
-      bayesian.expectedGames,
-
-    elo:
+  const structuralFamilyExpected =
+    STRUCTURAL_MIX.markov *
+    Number(
+      structural.expectedGames
+    ) +
+    STRUCTURAL_MIX.elo *
+    Number(
       elo.expectedGames
-  };
-
-  /*
-   * El centro robusto con 3 modelos
-   * es la mediana.
-   */
-  const center =
-    median3(
-      expected.structural,
-      expected.bayesian,
-      expected.elo
     );
 
-  const scale =
-    2.75;
-
-  const raw = {};
-
-  for (
-    const key
-    of Object.keys(
-      BASE_WEIGHTS
-    )
-  ) {
-    const deviation =
-      Math.abs(
-        expected[key] -
-        center
-      );
-
-    /*
-     * Una desviación de 10 games
-     * prácticamente elimina el modelo
-     * de esa predicción.
-     */
-    const robustFactor =
-      Math.max(
-        0.05,
-        Math.exp(
-          -0.5 *
-          Math.pow(
-            deviation /
-            scale,
-            2
-          )
-        )
-      );
-
-    raw[key] =
-      BASE_WEIGHTS[key] *
-      robustFactor;
-  }
-
-  const total =
-    raw.structural +
-    raw.bayesian +
-    raw.elo;
+  const familyGap =
+    Math.abs(
+      structuralFamilyExpected -
+      Number(
+        bayesian.expectedGames
+      )
+    );
 
   return {
     structural:
-      raw.structural /
-      total,
+      FAMILY_WEIGHTS
+        .structuralFamily *
+      STRUCTURAL_MIX.markov,
 
     bayesian:
-      raw.bayesian /
-      total,
+      FAMILY_WEIGHTS
+        .bayesian,
 
     elo:
-      raw.elo /
-      total,
+      FAMILY_WEIGHTS
+        .structuralFamily *
+      STRUCTURAL_MIX.elo,
 
-    center
+    structuralFamilyExpected,
+    familyGap,
+    correlationGuard: true
   };
 }
 
@@ -409,7 +372,7 @@ export function simulateEnsembleTotals(
     );
 
   const weights =
-    robustWeights(
+    decorrelatedWeights(
       structural,
       bayesian,
       elo
@@ -635,7 +598,7 @@ export function simulateEnsembleTotals(
 
   return {
     version:
-      'ENSEMBLE-0.4.1',
+      'ENSEMBLE-0.5.0-BIASGUARD',
 
     mode:
       'ENSEMBLE',
@@ -771,6 +734,19 @@ export function simulateEnsembleTotals(
         round2(
           expectedRange
         ),
+
+      familyGap:
+        round2(
+          weights.familyGap
+        ),
+
+      structuralFamilyExpected:
+        round2(
+          weights.structuralFamilyExpected
+        ),
+
+      correlationGuard:
+        true,
 
       consensusStatus:
         consensus,

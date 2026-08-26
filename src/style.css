@@ -3095,3 +3095,124 @@ body.detail-open {
     grid-column: 1 / -1;
   }
 }
+
+/* v0.6.8.1 DIRECTION BIAS AUDIT */
+
+.direction-bias-panel {
+  overflow: hidden;
+  margin: 12px 0 18px;
+  border: 1px solid #284437;
+  border-radius: 14px;
+  background: #08150e;
+}
+
+.direction-bias-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px;
+  border-bottom: 1px solid #1d3328;
+}
+
+.direction-bias-head span {
+  display: block;
+  color: #63eaa0;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.direction-bias-head strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+}
+
+.direction-bias-head b {
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: #76e8a7;
+  background: #10331f;
+  font-size: 7px;
+}
+
+.direction-bias-panel.audit {
+  border-color: #6b4c22;
+}
+
+.direction-bias-panel.audit .direction-bias-head {
+  background: rgba(91, 61, 20, .16);
+}
+
+.direction-bias-panel.audit .direction-bias-head b {
+  color: #f0c87a;
+  background: #4c3014;
+}
+
+.direction-bias-panel.early_sample .direction-bias-head b {
+  color: #d9c676;
+  background: #342b12;
+}
+
+.direction-bias-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: #183025;
+}
+
+.direction-bias-metrics > div {
+  padding: 10px 9px;
+  background: #09160f;
+}
+
+.direction-bias-metrics span,
+.direction-bias-detail > span {
+  display: block;
+  color: #62766b;
+  font-size: 6px;
+  font-weight: 900;
+}
+
+.direction-bias-metrics strong {
+  display: block;
+  margin-top: 4px;
+  color: #e8f1ec;
+  font-size: 12px;
+}
+
+.direction-bias-detail {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: #172d23;
+}
+
+.direction-bias-detail > span {
+  padding: 9px;
+  background: #0a1710;
+}
+
+.direction-bias-detail > span strong {
+  display: block;
+  margin-top: 4px;
+  color: #dfe9e3;
+  font-size: 8px;
+}
+
+.direction-bias-detail em {
+  grid-column: 1 / -1;
+  padding: 8px 10px;
+  color: #d6b875;
+  background: #20180b;
+  font-size: 7px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+@media (max-width: 420px) {
+  .direction-bias-metrics,
+  .direction-bias-detail {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

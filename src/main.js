@@ -1,6 +1,10 @@
 import './style.css';
 import './v068.css';
 import './v063-ui.js';
+
+import {
+  renderDirectionAudit
+} from './v0681-ui.js';
 import { getTodayMatches } from './data/espn.js';
 import { enrichMatchesWithStats } from './engine/playerStats.js';
 import { enrichMatchesWithMatchup } from './engine/matchup.js';
@@ -121,7 +125,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.8</div>
+        <div class="version">ATP + WTA · v0.6.8.1</div>
       </div>
 
       <button
@@ -2461,6 +2465,7 @@ function renderMatches() {
   renderRanking();
   renderCenso();
   renderLabBank();
+  renderDirectionAudit(matches);
 
   const list = filteredMatches();
 

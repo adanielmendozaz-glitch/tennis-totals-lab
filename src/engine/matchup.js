@@ -214,6 +214,55 @@ function weightedLogit(
   );
 }
 
+
+/*
+ * v0.6.8.1 HOLD FUSION
+ *
+ * Point-model sigue siendo la base.
+ * La evidencia observada a nivel game entra
+ * según reliability. No fuerza UNDER:
+ * game evidence puede subir o bajar el HOLD.
+ */
+export function blendHoldEvidence(
+  pointHold,
+  gameHold,
+  reliabilityValue
+) {
+  const evidence =
+    clamp(
+      Number(
+        reliabilityValue || 0
+      ),
+      0,
+      1
+    );
+
+  const gameWeight =
+    clamp(
+      0.10 +
+      evidence * 0.30,
+      0.10,
+      0.36
+    );
+
+  const pointWeight =
+    1 - gameWeight;
+
+  const hold =
+    weightedLogit(
+      pointHold,
+      gameHold,
+      pointWeight,
+      gameWeight
+    );
+
+  return {
+    hold,
+    pointWeight,
+    gameWeight
+  };
+}
+
 /*
  * Markov exacto de un game de tenis.
  *
@@ -322,7 +371,7 @@ function matchupPlayer(
       0.44
     );
 
-  const projectedHold =
+  const pointModelHold =
     holdFromPointProbability(
       projectedServe
     );
@@ -368,6 +417,19 @@ function matchupPlayer(
       0.44
     );
 
+  const holdFusion =
+    blendHoldEvidence(
+      pointModelHold,
+      gameCrossCheck,
+      (
+        serverRel +
+        returnRel
+      ) / 2
+    );
+
+  const projectedHold =
+    holdFusion.hold;
+
   return {
     servePointPct:
       toPct(
@@ -377,6 +439,11 @@ function matchupPlayer(
     holdPct:
       toPct(
         projectedHold
+      ),
+
+    pointHoldPct:
+      toPct(
+        pointModelHold
       ),
 
     baselineServePct:
@@ -402,8 +469,19 @@ function matchupPlayer(
 
     holdGapPct:
       toPct(
-        projectedHold -
+        pointModelHold -
         gameCrossCheck
+      ),
+
+    holdCorrectionPct:
+      toPct(
+        projectedHold -
+        pointModelHold
+      ),
+
+    holdFusionGameWeightPct:
+      toPct(
+        holdFusion.gameWeight
       ),
 
     reliabilityPct:
