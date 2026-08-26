@@ -9,6 +9,11 @@ import { getMarketReadiness } from './engine/readiness.js';
 import { buildRanking } from './engine/ranking.js';
 
 import {
+  initLabBankUI,
+  renderLabBank
+} from './ui/labBank.js';
+
+import {
   getCensoEntries,
   hasCenso,
   captureCenso,
@@ -115,7 +120,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.6</div>
+        <div class="version">ATP + WTA · v0.6.7</div>
       </div>
 
       <button
@@ -570,6 +575,8 @@ app.innerHTML = `
 
   </main>
 `;
+
+initLabBankUI();
 
 const matchesEl = document.querySelector('#matches');
 const loadingPanel = document.querySelector('#loadingPanel');
@@ -1596,21 +1603,39 @@ function marketPanel(match) {
             recommendation
           )
             ? `
-              <button
-                type="button"
-                class="censo-capture-btn"
-                data-censo-capture="${match.id}"
-                ${
-                  hasCenso(match.id)
-                    ? 'disabled'
-                    : ''
-                }>
-                ${
-                  hasCenso(match.id)
-                    ? '✓ EN CENSO'
-                    : 'REGISTRAR CENSO'
-                }
-              </button>
+              <div class="censo-unit-control">
+                <label>
+                  <span>STAKE</span>
+                  <select
+                    data-censo-units
+                    ${
+                      hasCenso(match.id)
+                        ? 'disabled'
+                        : ''
+                    }>
+                    <option value="0.25">0.25 U</option>
+                    <option value="0.5">0.50 U</option>
+                    <option value="0.75">0.75 U</option>
+                    <option value="1" selected>1.00 U</option>
+                  </select>
+                </label>
+
+                <button
+                  type="button"
+                  class="censo-capture-btn"
+                  data-censo-capture="${match.id}"
+                  ${
+                    hasCenso(match.id)
+                      ? 'disabled'
+                      : ''
+                  }>
+                  ${
+                    hasCenso(match.id)
+                      ? '✓ EN CENSO'
+                      : 'REGISTRAR CENSO'
+                  }
+                </button>
+              </div>
             `
             : ''
         }
@@ -2260,6 +2285,19 @@ function censoCard(entry) {
         </span>
 
         <span>
+          STAKE
+          <strong>
+            ${
+              Number.isFinite(
+                Number(entry.stakeUnits)
+              )
+                ? `${Number(entry.stakeUnits).toFixed(2)} U`
+                : 'LEGACY'
+            }
+          </strong>
+        </span>
+
+        <span>
           READINESS
           <strong>
             ${Number(entry.readiness).toFixed(1)}%
@@ -2293,6 +2331,16 @@ function censoCard(entry) {
                   '—'
                 }
               </strong>
+
+              ${
+                Number.isFinite(
+                  Number(
+                    entry.result?.profitUnits
+                  )
+                )
+                  ? `<span class="censo-profit ${Number(entry.result.profitUnits) >= 0 ? 'positive' : 'negative'}">P/L ${Number(entry.result.profitUnits) >= 0 ? '+' : ''}${Number(entry.result.profitUnits).toFixed(2)} U</span>`
+                  : ''
+              }
 
               ${
                 entry.result?.note
@@ -2409,6 +2457,7 @@ function renderCenso() {
 function renderMatches() {
   renderRanking();
   renderCenso();
+  renderLabBank();
 
   const list = filteredMatches();
 
@@ -3627,9 +3676,28 @@ document.addEventListener(
       return;
     }
 
+    const marketBox =
+      button.closest(
+        '.market-box'
+      );
+
+    const units =
+      Number(
+        marketBox
+          ?.querySelector(
+            '[data-censo-units]'
+          )
+          ?.value ||
+        1
+      );
+
     const result =
       captureCenso(
-        match
+        match,
+        {
+          stakeUnits:
+            units
+        }
       );
 
     if (!result.ok) {
@@ -3897,6 +3965,13 @@ document.querySelectorAll('[data-tab]')
         .forEach(b => b.classList.remove('selected'));
 
       button.classList.add('selected');
+
+      if (
+        activeTab === 'lab' ||
+        activeTab === 'bank'
+      ) {
+        renderLabBank();
+      }
     });
   });
 
