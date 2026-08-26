@@ -1,4 +1,5 @@
 import './style.css';
+import './v068.css';
 import './v063-ui.js';
 import { getTodayMatches } from './data/espn.js';
 import { enrichMatchesWithStats } from './engine/playerStats.js';
@@ -11,7 +12,7 @@ import { buildRanking } from './engine/ranking.js';
 import {
   initLabBankUI,
   renderLabBank
-} from './ui/labBank.js';
+} from './ui/labBankV068.js';
 
 import {
   getCensoEntries,
@@ -120,7 +121,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.7</div>
+        <div class="version">ATP + WTA · v0.6.8</div>
       </div>
 
       <button
@@ -2288,11 +2289,13 @@ function censoCard(entry) {
           STAKE
           <strong>
             ${
-              Number.isFinite(
-                Number(entry.stakeUnits)
-              )
-                ? `${Number(entry.stakeUnits).toFixed(2)} U`
-                : 'LEGACY'
+              entry.stakeIntegrity?.status === 'REVIEW'
+                ? 'STAKE REVIEW'
+                : Number.isFinite(
+                    Number(entry.stakeUnits)
+                  )
+                  ? `${Number(entry.stakeUnits).toFixed(2)} U`
+                  : 'LEGACY'
             }
           </strong>
         </span>

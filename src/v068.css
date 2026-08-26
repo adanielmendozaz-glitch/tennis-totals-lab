@@ -1,0 +1,252 @@
+/* Tennis Totals Lab v0.6.8 — Lab & Bank Hardening */
+
+.positive {
+  color: #63eaa0 !important;
+}
+
+.negative {
+  color: #f08e74 !important;
+}
+
+.neutral {
+  color: #dfe9e3 !important;
+}
+
+.lab-filter-card {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid #244536;
+  border-radius: 14px;
+  background: #08150e;
+}
+
+.lab-window-switch {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 9px;
+}
+
+.lab-window-switch button {
+  border: 1px solid #284438;
+  border-radius: 9px;
+  padding: 8px;
+  color: #71867a;
+  background: #0a1811;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.lab-window-switch button.active {
+  border-color: #59e69a;
+  color: #07110c;
+  background: #59e69a;
+}
+
+.lab-filter-selects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.lab-filter-selects label > span {
+  display: block;
+  margin-bottom: 4px;
+  color: #63776c;
+  font-size: 6px;
+  font-weight: 900;
+}
+
+.lab-filter-selects select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #284438;
+  border-radius: 8px;
+  padding: 7px 6px;
+  color: #e4eee8;
+  background: #07120c;
+  font-size: 7px;
+}
+
+.lab-filter-card > small {
+  display: block;
+  margin-top: 8px;
+  color: #6c8074;
+  font-size: 7px;
+}
+
+.calibration-card.too_small {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(117, 83, 34, .13),
+      transparent
+    );
+}
+
+.calibration-warning {
+  margin-top: 9px;
+  padding: 7px 8px;
+  border: 1px solid #4d3d1d;
+  border-radius: 8px;
+  color: #c4ad68;
+  background: #211b0c;
+  font-size: 7px;
+  line-height: 1.4;
+}
+
+.bank-equity-card,
+.bank-history-card {
+  overflow: hidden;
+  margin-bottom: 11px;
+  border: 1px solid #203a2d;
+  border-radius: 14px;
+  background: #08150e;
+}
+
+.bank-equity-chart {
+  min-height: 120px;
+  padding: 10px 12px 12px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(38, 86, 61, .12),
+      transparent
+    );
+}
+
+.bank-equity-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 120px;
+}
+
+.bank-chart-axis {
+  stroke: #213c2f;
+  stroke-width: 1;
+}
+
+.bank-chart-line {
+  fill: none;
+  stroke: #61e99f;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bank-chart-dot {
+  fill: #dff8e9;
+  stroke: #61e99f;
+  stroke-width: 2;
+}
+
+.bank-chart-empty {
+  display: grid;
+  min-height: 110px;
+  place-items: center;
+  color: #6f8278;
+  font-size: 8px;
+  text-align: center;
+}
+
+.bank-integrity-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  overflow: hidden;
+  margin-bottom: 11px;
+  border: 1px solid #203a2d;
+  border-radius: 12px;
+  background: #183025;
+}
+
+.bank-integrity-summary > div {
+  padding: 10px 8px;
+  background: #09160f;
+}
+
+.bank-integrity-summary span {
+  display: block;
+  color: #62766b;
+  font-size: 6px;
+  font-weight: 900;
+}
+
+.bank-integrity-summary strong {
+  display: block;
+  margin-top: 4px;
+  color: #e7f0eb;
+  font-size: 14px;
+}
+
+.bank-history-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.7fr)
+    .65fr
+    .75fr
+    .75fr;
+  gap: 7px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #17291f;
+}
+
+.bank-history-row:last-child {
+  border-bottom: 0;
+}
+
+.bank-history-match {
+  min-width: 0;
+}
+
+.bank-history-match strong {
+  display: block;
+  overflow: hidden;
+  color: #e8f0eb;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-history-match strong span {
+  color: #61746a;
+  font-size: 6px;
+}
+
+.bank-history-match small {
+  display: block;
+  margin-top: 3px;
+  color: #71837a;
+  font-size: 7px;
+}
+
+.bank-history-row > span {
+  color: #61756a;
+  font-size: 6px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.bank-history-row > span b {
+  display: block;
+  margin-top: 3px;
+  color: #dfe9e3;
+  font-size: 8px;
+}
+
+.status-win {
+  color: #63eaa0 !important;
+}
+
+.status-loss {
+  color: #f08e74 !important;
+}
+
+.status-push {
+  color: #d6c36b !important;
+}
+
+.status-pending {
+  color: #93a59c !important;
+}
