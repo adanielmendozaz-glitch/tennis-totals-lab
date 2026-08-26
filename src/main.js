@@ -7,6 +7,13 @@ import { evaluateMarket } from './engine/market.js';
 import { getMarketReadiness } from './engine/readiness.js';
 import { buildRanking } from './engine/ranking.js';
 
+import {
+  getCensoEntries,
+  hasCenso,
+  captureCenso,
+  settleCensoFromMatches
+} from './engine/censo.js';
+
 const app = document.querySelector('#app');
 
 let matches = [];
@@ -103,7 +110,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.0</div>
+        <div class="version">ATP + WTA · v0.6.1</div>
       </div>
 
       <button
@@ -431,14 +438,53 @@ app.innerHTML = `
 
     </section>
 
-    <section id="censoView" class="view empty-view">
-      <div class="empty-icon">◎</div>
-      <h2>Censo</h2>
-      <p>
-        Predicciones congeladas, resultados,
-        liquidación automática y control histórico.
-      </p>
-      <span class="coming">DATABASE LAYER · v0.2</span>
+    <section
+      id="censoView"
+      class="view censo-view">
+
+      <div class="censo-header">
+        <div>
+          <span>MODEL AUDIT</span>
+          <h2>Censo</h2>
+        </div>
+
+        <strong>FROZEN PICKS</strong>
+      </div>
+
+      <div class="censo-metrics">
+
+        <div>
+          <span>TOTAL</span>
+          <strong id="censoTotal">0</strong>
+        </div>
+
+        <div>
+          <span>PENDING</span>
+          <strong id="censoPending">0</strong>
+        </div>
+
+        <div>
+          <span>W - L</span>
+          <strong id="censoRecord">0-0</strong>
+        </div>
+
+        <div>
+          <span>REVIEW</span>
+          <strong id="censoReview">0</strong>
+        </div>
+
+      </div>
+
+      <div
+        id="censoList"
+        class="censo-list">
+
+        <div class="censo-empty">
+          Todavía no hay predicciones congeladas.
+        </div>
+
+      </div>
+
     </section>
 
     <section id="labView" class="view empty-view">
@@ -1359,13 +1405,41 @@ function marketPanel(match) {
       </div>
 
       <div class="market-reason">
+
+        <span>
+          ${
+            m.reason === 'VALUE'
+              ? 'VALOR DETECTADO · candidato para Ranking'
+              : m.reason === 'NO_PRICE'
+                ? 'LÍNEA DISPONIBLE · PRECIO NO DISPONIBLE'
+                : 'SIN EDGE SUFICIENTE'
+          }
+        </span>
+
         ${
-          m.reason === 'VALUE'
-            ? 'VALOR DETECTADO · candidato para Ranking'
-            : m.reason === 'NO_PRICE'
-              ? 'LÍNEA DISPONIBLE · PRECIO NO DISPONIBLE'
-              : 'SIN EDGE SUFICIENTE'
+          ['PLAY', 'LEAN'].includes(
+            recommendation
+          )
+            ? `
+              <button
+                type="button"
+                class="censo-capture-btn"
+                data-censo-capture="${match.id}"
+                ${
+                  hasCenso(match.id)
+                    ? 'disabled'
+                    : ''
+                }>
+                ${
+                  hasCenso(match.id)
+                    ? '✓ EN CENSO'
+                    : 'REGISTRAR CENSO'
+                }
+              </button>
+            `
+            : ''
         }
+
       </div>
 
     </div>
@@ -1600,7 +1674,7 @@ function matchCard(match) {
         <span>
           ${
             totals
-              ? `EXP ${totals.expectedGames.toFixed(2)}`
+              ? `${live ? 'PRE ' : ''}EXP ${totals.expectedGames.toFixed(2)}`
               : match.matchup?.status || 'WAIT'
           }
         </span>
@@ -1900,8 +1974,266 @@ function renderRanking() {
       .join('');
 }
 
+
+function censoDate(value) {
+  if (!value) {
+    return '—';
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat(
+    'es-MX',
+    {
+      day: '2-digit',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit'
+    }
+  ).format(date);
+}
+
+function censoCard(entry) {
+  const status =
+    entry.result?.status ||
+    'PENDING';
+
+  const statusClass =
+    status.toLowerCase();
+
+  return `
+    <article class="censo-card ${statusClass}">
+
+      <div class="censo-card-head">
+
+        <div>
+          <span>
+            ${entry.tour}
+            · ${entry.surface}
+          </span>
+
+          <strong>
+            ${entry.tournament}
+          </strong>
+        </div>
+
+        <b class="censo-result ${statusClass}">
+          ${status}
+        </b>
+
+      </div>
+
+      <div class="censo-players">
+        <strong>
+          ${entry.playerA}
+        </strong>
+
+        <span>vs</span>
+
+        <strong>
+          ${entry.playerB}
+        </strong>
+      </div>
+
+      <div class="censo-pick">
+
+        <div>
+          <span>PICK</span>
+          <strong>
+            ${entry.side}
+            ${Number(entry.line).toFixed(1)}
+          </strong>
+        </div>
+
+        <div>
+          <span>ODDS</span>
+          <strong>
+            ${marketOddsText(entry.odds)}
+          </strong>
+        </div>
+
+        <div>
+          <span>MODEL</span>
+          <strong>
+            ${Number(entry.modelPct).toFixed(1)}%
+          </strong>
+        </div>
+
+        <div>
+          <span>EDGE</span>
+          <strong>
+            ${Number(entry.edgePct) >= 0 ? '+' : ''}
+            ${Number(entry.edgePct).toFixed(1)} pp
+          </strong>
+        </div>
+
+      </div>
+
+      <div class="censo-details">
+
+        <span>
+          ${entry.recommendation}
+        </span>
+
+        <span>
+          READINESS
+          <strong>
+            ${Number(entry.readiness).toFixed(1)}%
+          </strong>
+        </span>
+
+        <span>
+          QUALITY
+          <strong>
+            ${Number(entry.quality).toFixed(1)}%
+          </strong>
+        </span>
+
+        <span>
+          DISAG
+          <strong>
+            ${Number(entry.disagreement).toFixed(1)} pp
+          </strong>
+        </span>
+
+      </div>
+
+      ${
+        status !== 'PENDING'
+          ? `
+            <div class="censo-settlement">
+              TOTAL FINAL
+              <strong>
+                ${
+                  entry.result?.totalGames ??
+                  '—'
+                }
+              </strong>
+
+              ${
+                entry.result?.note
+                  ? `<span>${entry.result.note}</span>`
+                  : ''
+              }
+            </div>
+          `
+          : `
+            <div class="censo-settlement pending">
+              Congelado
+              ${censoDate(entry.capturedAt)}
+              · esperando resultado
+            </div>
+          `
+      }
+
+    </article>
+  `;
+}
+
+function renderCenso() {
+  /*
+   * Solo modifica registros PENDING
+   * cuando ESPN ya presenta resultado final.
+   */
+  settleCensoFromMatches(
+    matches
+  );
+
+  const entries =
+    getCensoEntries();
+
+  const list =
+    document.querySelector(
+      '#censoList'
+    );
+
+  if (!list) {
+    return;
+  }
+
+  const wins =
+    entries.filter(
+      entry =>
+        entry.result?.status ===
+        'WIN'
+    ).length;
+
+  const losses =
+    entries.filter(
+      entry =>
+        entry.result?.status ===
+        'LOSS'
+    ).length;
+
+  const pending =
+    entries.filter(
+      entry =>
+        entry.result?.status ===
+        'PENDING'
+    ).length;
+
+  const review =
+    entries.filter(
+      entry =>
+        entry.result?.status ===
+        'REVIEW'
+    ).length;
+
+  document.querySelector(
+    '#censoTotal'
+  ).textContent =
+    entries.length;
+
+  document.querySelector(
+    '#censoPending'
+  ).textContent =
+    pending;
+
+  document.querySelector(
+    '#censoRecord'
+  ).textContent =
+    `${wins}-${losses}`;
+
+  document.querySelector(
+    '#censoReview'
+  ).textContent =
+    review;
+
+  if (!entries.length) {
+    list.innerHTML = `
+      <div class="censo-empty">
+        <strong>
+          Censo vacío
+        </strong>
+
+        <span>
+          Registra un PLAY o LEAN
+          desde el detalle del partido.
+        </span>
+      </div>
+    `;
+
+    return;
+  }
+
+  list.innerHTML =
+    entries
+      .map(censoCard)
+      .join('');
+}
+
 function renderMatches() {
   renderRanking();
+  renderCenso();
 
   const list = filteredMatches();
 
@@ -2870,12 +3202,6 @@ function setConnection(mode, text) {
   label.textContent = text;
 }
 
-async function refresh() {
-  if (loading) return;
-
-  loading = true;
-
-  
 document.addEventListener(
   'click',
   event => {
@@ -2988,6 +3314,78 @@ document.addEventListener(
     }
   }
 );
+
+document.addEventListener(
+  'click',
+  event => {
+
+    const button =
+      event.target.closest(
+        '[data-censo-capture]'
+      );
+
+    if (!button) {
+      return;
+    }
+
+    const matchId =
+      button.getAttribute(
+        'data-censo-capture'
+      );
+
+    const match =
+      matches.find(
+        item =>
+          String(item.id) ===
+          String(matchId)
+      );
+
+    if (!match) {
+      return;
+    }
+
+    const result =
+      captureCenso(
+        match
+      );
+
+    if (!result.ok) {
+      if (
+        result.reason ===
+        'ALREADY_CAPTURED'
+      ) {
+        alert(
+          'Este partido ya está congelado en el Censo.'
+        );
+      } else {
+        alert(
+          'Este partido todavía no puede registrarse en el Censo.'
+        );
+      }
+
+      return;
+    }
+
+    renderMatches();
+
+    if (
+      selectedMatchId ===
+      String(match.id)
+    ) {
+      openMatchDetail(
+        match.id
+      );
+    }
+  }
+);
+
+
+async function refresh() {
+  if (loading) return;
+
+  loading = true;
+
+  
 
 document.querySelector('#refreshBtn').classList.add('spinning');
 

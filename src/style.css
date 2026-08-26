@@ -2060,3 +2060,277 @@ h1 {
 body.detail-open {
   overflow: hidden;
 }
+
+/* CENSO SAFE LAYER v0.6.1 */
+
+.censo-view {
+  padding-bottom: 110px;
+}
+
+.censo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.censo-header span {
+  color: #65eaa0;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.censo-header h2 {
+  margin: 3px 0 0;
+  font-size: 25px;
+}
+
+.censo-header > strong {
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: #112e20;
+  color: #66e99f;
+  font-size: 7px;
+}
+
+.censo-metrics {
+  display: grid;
+  grid-template-columns:
+    repeat(4, 1fr);
+  gap: 7px;
+  margin-bottom: 15px;
+}
+
+.censo-metrics > div {
+  padding: 10px;
+  border: 1px solid #213d30;
+  border-radius: 11px;
+  background: #09160f;
+}
+
+.censo-metrics span {
+  display: block;
+  color: #62766b;
+  font-size: 6px;
+  font-weight: 900;
+}
+
+.censo-metrics strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 16px;
+}
+
+.censo-list {
+  display: grid;
+  gap: 11px;
+}
+
+.censo-card {
+  overflow: hidden;
+  border: 1px solid #274538;
+  border-radius: 15px;
+  background: #08150e;
+}
+
+.censo-card.win {
+  border-color: #39875d;
+}
+
+.censo-card.loss {
+  border-color: #724033;
+}
+
+.censo-card.review {
+  border-color: #76642d;
+}
+
+.censo-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px;
+  border-bottom: 1px solid #17291f;
+}
+
+.censo-card-head span {
+  display: block;
+  color: #687b70;
+  font-size: 7px;
+  font-weight: 900;
+}
+
+.censo-card-head strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.censo-result {
+  align-self: center;
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 8px;
+}
+
+.censo-result.pending {
+  background: #19241e;
+  color: #9aaba1;
+}
+
+.censo-result.win {
+  background: #123b26;
+  color: #68eda2;
+}
+
+.censo-result.loss {
+  background: #341b14;
+  color: #ec9b7e;
+}
+
+.censo-result.push,
+.censo-result.review {
+  background: #302911;
+  color: #e3ca6d;
+}
+
+.censo-players {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 12px;
+}
+
+.censo-players span {
+  color: #617269;
+  font-size: 7px;
+}
+
+.censo-pick {
+  display: grid;
+  grid-template-columns:
+    repeat(4, 1fr);
+  gap: 1px;
+  background: #1b3025;
+}
+
+.censo-pick > div {
+  padding: 9px 8px;
+  background: #09160f;
+}
+
+.censo-pick span {
+  display: block;
+  color: #61756a;
+  font-size: 6px;
+  font-weight: 900;
+}
+
+.censo-pick strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+}
+
+.censo-details {
+  display: grid;
+  grid-template-columns:
+    repeat(4, 1fr);
+  border-top: 1px solid #17291f;
+}
+
+.censo-details > span {
+  padding: 8px;
+  color: #667a6f;
+  font-size: 6px;
+  font-weight: 900;
+}
+
+.censo-details strong {
+  display: block;
+  margin-top: 3px;
+  color: #cad8d1;
+  font-size: 8px;
+}
+
+.censo-settlement {
+  padding: 9px 12px;
+  border-top: 1px solid #17291f;
+  color: #74877c;
+  font-size: 8px;
+}
+
+.censo-settlement strong {
+  margin-left: 5px;
+  color: #eff7f2;
+}
+
+.censo-settlement span {
+  display: block;
+  margin-top: 3px;
+}
+
+.censo-settlement.pending {
+  color: #788a80;
+}
+
+.censo-empty {
+  padding: 32px 15px;
+  border: 1px solid #213a2e;
+  border-radius: 14px;
+  text-align: center;
+  color: #73867b;
+}
+
+.censo-empty strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #dce8e1;
+}
+
+.censo-empty span {
+  font-size: 9px;
+}
+
+.market-reason {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.censo-capture-btn {
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #55e598;
+  color: #07110c;
+  font-size: 7px;
+  font-weight: 900;
+}
+
+.censo-capture-btn:disabled {
+  background: #163423;
+  color: #67d89a;
+}
+
+@media (max-width: 420px) {
+  .censo-metrics {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .censo-pick,
+  .censo-details {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .market-reason {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
