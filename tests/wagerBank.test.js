@@ -67,3 +67,11 @@ test('Bank: ROI y drawdown se calculan con stakes reales', () => {
   assert.equal(bank.currentBankUnits, 100);
 });
 
+
+
+test('Units: stake ausente no se convierte en 1U', () => {
+  assert.equal(
+    normalizeStakeUnits(undefined, null),
+    null
+  );
+});
