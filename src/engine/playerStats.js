@@ -954,7 +954,8 @@ function profile(
   surface,
   index,
   asOf,
-  eloOverride = null
+  eloOverride = null,
+  sourceMode = 'COVERAGE'
 ) {
   if (
     !identity?.resolved ||
@@ -969,12 +970,20 @@ function profile(
     ) ||
     [];
 
+  const scopedSource =
+    sourceMode === 'CORE'
+      ? source.filter(
+          record =>
+            record.historySource !== 'EXTENDED'
+        )
+      : source;
+
   /*
    * Point-In-Time:
    * nada del mismo día ni del futuro.
    */
   const all =
-    source.filter(
+    scopedSource.filter(
       record =>
         isDateKeyBeforeAsOf(
           record.date,
@@ -1548,7 +1557,8 @@ export async function enrichMatchesWithStats(
           surface,
           index,
           cutoffKey,
-          pitElo
+          pitElo,
+          'COVERAGE'
         );
 
       const profileB =
@@ -1557,7 +1567,28 @@ export async function enrichMatchesWithStats(
           surface,
           index,
           cutoffKey,
-          pitElo
+          pitElo,
+          'COVERAGE'
+        );
+
+      const coreProfileA =
+        profile(
+          identityA,
+          surface,
+          index,
+          cutoffKey,
+          pitElo,
+          'CORE'
+        );
+
+      const coreProfileB =
+        profile(
+          identityB,
+          surface,
+          index,
+          cutoffKey,
+          pitElo,
+          'CORE'
         );
 
       totalPlayers += 2;
@@ -1638,7 +1669,10 @@ export async function enrichMatchesWithStats(
             identityA,
 
           profile:
-            profileA
+            profileA,
+
+          coreProfile:
+            coreProfileA
         },
 
         playerB: {
@@ -1648,7 +1682,10 @@ export async function enrichMatchesWithStats(
             identityB,
 
           profile:
-            profileB
+            profileB,
+
+          coreProfile:
+            coreProfileB
         }
       };
     });

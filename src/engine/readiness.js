@@ -17,14 +17,16 @@ function sampleQuality(match) {
     Number(
       match.playerA
         ?.profile
-        ?.sample || 0
+        ?.effectiveSample ??
+        match.playerA?.profile?.sample ?? 0
     );
 
   const b =
     Number(
       match.playerB
         ?.profile
-        ?.sample || 0
+        ?.effectiveSample ??
+        match.playerB?.profile?.sample ?? 0
     );
 
   const minimum =
@@ -159,8 +161,19 @@ export function getMarketReadiness(
   score -=
     disagreementPenalty;
 
-  score =
-    clamp(score);
+  const trustLevel =
+    match.matchup?.dataTrust?.level ||
+    'UNKNOWN';
+
+  const trustPenalty =
+    trustLevel === 'CAUTION'
+      ? 8
+      : trustLevel === 'MEDIUM'
+        ? 3
+        : 0;
+
+  score -= trustPenalty;
+  score = clamp(score);
 
   const eligible =
     match.state === 'pre' &&
@@ -264,7 +277,16 @@ export function getMarketReadiness(
       disagreement:
         Math.round(
           disagreement * 10
-        ) / 10
+        ) / 10,
+
+      dataTrust:
+        match.matchup?.dataTrust?.score ?? null,
+
+      dataTrustLevel:
+        match.matchup?.dataTrust?.level ?? 'UNKNOWN',
+
+      dataTrustPenalty:
+        trustPenalty
     }
   };
 }

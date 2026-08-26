@@ -145,7 +145,7 @@ export function captureCenso(
 
   const entry = {
     appVersion:
-      '0.6.5',
+      '0.6.6',
 
     modelVersion:
       match.totals?.version ??
@@ -303,6 +303,14 @@ export function captureCenso(
             ?.historyMix ??
           null
       }
+    },
+
+    dataTrustAudit: {
+      level: match.matchup?.dataTrust?.level ?? null,
+      score: match.matchup?.dataTrust?.score ?? null,
+      playerA: match.matchup?.dataTrust?.playerA ?? null,
+      playerB: match.matchup?.dataTrust?.playerB ?? null,
+      shadow: match.totals?.shadowAudit ?? null
     },
 
     id,

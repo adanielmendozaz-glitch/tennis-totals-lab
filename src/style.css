@@ -2366,3 +2366,33 @@ body.detail-open {
   max-width: 280px;
 }
 
+
+
+/* v0.6.6 Data Trust & Shadow Audit */
+.data-trust-strip {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 1fr;
+  border-top: 1px solid rgba(255,255,255,.06);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.025);
+}
+.data-trust-strip > div { padding: 11px 16px; display: flex; flex-direction: column; gap: 4px; }
+.data-trust-strip span, .shadow-audit span { font-size: 9px; letter-spacing: .06em; opacity: .58; }
+.data-trust-strip strong { font-size: 11px; }
+.data-trust-strip.high strong { color: #75eeb0; }
+.data-trust-strip.medium strong { color: #dcc66c; }
+.data-trust-strip.caution strong { color: #e89b7d; }
+.shadow-audit {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid rgba(255,255,255,.06);
+  background: rgba(5,22,14,.55);
+}
+.shadow-audit > div { padding: 11px 12px; display: flex; flex-direction: column; gap: 4px; }
+.shadow-audit strong { font-size: 12px; }
+.shadow-audit .shadow-status { grid-column: 1 / -1; padding: 9px 12px; font-size: 10px; }
+.shadow-audit.ok .shadow-status { color: #75eeb0; }
+.shadow-audit.watch .shadow-status { color: #dbc56c; }
+.shadow-audit.caution .shadow-status { color: #e89b7d; }
+.shadow-audit.unavailable { display: block; padding: 10px 14px; font-size: 10px; opacity: .58; }
+

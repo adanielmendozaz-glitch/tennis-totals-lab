@@ -3,6 +3,10 @@ import {
   selectBaseline
 } from './surfaceBaselines.js';
 
+import {
+  matchDataTrust
+} from './dataTrust.js';
+
 const EPS =
   0.0001;
 
@@ -590,6 +594,9 @@ function buildMatchup(
       baseline
     );
 
+  const dataTrust =
+    matchDataTrust(match);
+
   const playerA =
     matchupPlayer(
       match.playerA.profile,
@@ -614,6 +621,36 @@ function buildMatchup(
       )
     ) / 2;
 
+  let shadowCore = null;
+
+  if (
+    status === 'FULL' &&
+    enoughSample(match.playerA?.coreProfile) &&
+    enoughSample(match.playerB?.coreProfile)
+  ) {
+    const shadowA = matchupPlayer(
+      match.playerA.coreProfile,
+      match.playerB.coreProfile,
+      baseline
+    );
+
+    const shadowB = matchupPlayer(
+      match.playerB.coreProfile,
+      match.playerA.coreProfile,
+      baseline
+    );
+
+    shadowCore = {
+      status: 'FULL',
+      markovReady: true,
+      baselineSurface: baseline.surface,
+      playerA: shadowA,
+      playerB: shadowB,
+      averageHoldPct:
+        Math.round(((Number(shadowA.holdPct || 0) + Number(shadowB.holdPct || 0)) / 2) * 10) / 10
+    };
+  }
+
   return {
     status,
 
@@ -635,6 +672,9 @@ function buildMatchup(
 
     coverageAudit:
       audit,
+
+    dataTrust,
+    shadowCore,
 
     markovReady:
       status === 'FULL',
@@ -693,6 +733,11 @@ export async function enrichMatchesWithMatchup(
   let partial = 0;
   let noData = 0;
   let markovReady = 0;
+
+  let trustHigh = 0;
+  let trustMedium = 0;
+  let trustCaution = 0;
+  let shadowEligible = 0;
 
   const enriched = [];
 
@@ -767,6 +812,13 @@ export async function enrichMatchesWithMatchup(
       matchup.status === 'FULL'
     ) {
       full++;
+
+      if (matchup.dataTrust?.level === 'HIGH') trustHigh++;
+      else if (matchup.dataTrust?.level === 'MEDIUM') trustMedium++;
+      else trustCaution++;
+
+      if (matchup.shadowCore?.markovReady) shadowEligible++;
+
     } else if (
       matchup.status === 'PARTIAL'
     ) {
@@ -839,6 +891,11 @@ export async function enrichMatchesWithMatchup(
       partial,
       noData,
       markovReady,
+
+      trustHigh,
+      trustMedium,
+      trustCaution,
+      shadowEligible,
 
       pointInTime:
         true,

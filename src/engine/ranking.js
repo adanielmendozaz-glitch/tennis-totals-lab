@@ -217,6 +217,24 @@ function rankingItem(match) {
     quality,
     disagreement,
 
+    dataTrust:
+      match.matchup?.dataTrust?.level ?? 'CAUTION',
+
+    dataTrustScore:
+      match.matchup?.dataTrust?.score ?? 0,
+
+    provenanceA:
+      match.matchup?.dataTrust?.playerA?.provenance?.label ?? 'NO_DATA',
+
+    provenanceB:
+      match.matchup?.dataTrust?.playerB?.provenance?.label ?? 'NO_DATA',
+
+    shadowStatus:
+      match.totals?.shadowAudit?.status ?? 'N/A',
+
+    shadowExpectedDelta:
+      match.totals?.shadowAudit?.expectedDelta ?? null,
+
     consensus:
       match.totals
         ?.diagnostics

@@ -115,7 +115,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.5</div>
+        <div class="version">ATP + WTA · v0.6.6</div>
       </div>
 
       <button
@@ -905,6 +905,27 @@ function matchupPanel(match) {
       )}
 
       ${
+        m.dataTrust
+          ? `
+            <div class="data-trust-strip ${m.dataTrust.level.toLowerCase()}">
+              <div>
+                <span>DATA TRUST</span>
+                <strong>${m.dataTrust.level} · ${Number(m.dataTrust.score).toFixed(1)}</strong>
+              </div>
+              <div>
+                <span>A</span>
+                <strong>${m.dataTrust.playerA?.provenance?.label || 'NO_DATA'}</strong>
+              </div>
+              <div>
+                <span>B</span>
+                <strong>${m.dataTrust.playerB?.provenance?.label || 'NO_DATA'}</strong>
+              </div>
+            </div>
+          `
+          : ''
+      }
+
+      ${
         m.status !== 'FULL' &&
         m.coverageAudit
           ? `
@@ -977,6 +998,9 @@ function totalsFingerprint(match) {
      * calculada con otro corte histórico.
      */
     match.pointInTime?.cutoffKey,
+    match.matchup?.dataTrust?.score,
+    match.matchup?.shadowCore?.playerA?.servePointPct,
+    match.matchup?.shadowCore?.playerB?.servePointPct,
 
     match.matchup?.playerA?.servePointPct,
     match.matchup?.playerB?.servePointPct,
@@ -1165,6 +1189,24 @@ function totalsPanel(match) {
         </span>
 
       </div>
+
+      ${
+        totals.shadowAudit?.available
+          ? `
+            <div class="shadow-audit ${totals.shadowAudit.status.toLowerCase()}">
+              <div><span>CORE SHADOW</span><strong>${totals.shadowAudit.coreExpectedGames.toFixed(2)}</strong></div>
+              <div><span>COVERAGE</span><strong>${totals.shadowAudit.coverageExpectedGames.toFixed(2)}</strong></div>
+              <div><span>Δ EXPECTED</span><strong>${totals.shadowAudit.expectedDelta >= 0 ? '+' : ''}${totals.shadowAudit.expectedDelta.toFixed(2)}</strong></div>
+              <div><span>MAX P Δ</span><strong>${totals.shadowAudit.maxProbabilityDeltaPct.toFixed(1)} pp</strong></div>
+              <div class="shadow-status">SHADOW ${totals.shadowAudit.status} · 5K CORE</div>
+            </div>
+          `
+          : `
+            <div class="shadow-audit unavailable">
+              SHADOW CORE · NO DISPONIBLE · ${totals.shadowAudit?.reason || 'CORE_SAMPLE_NOT_READY'}
+            </div>
+          `
+      }
 
       <div class="totals-foot">
 
@@ -3138,6 +3180,14 @@ function renderMatchupData(summary) {
         `
         : ''
     }
+
+    <span>
+      DATA TRUST:
+      HIGH <strong>${summary.trustHigh || 0}</strong>
+      · MED <strong>${summary.trustMedium || 0}</strong>
+      · CAUTION <strong>${summary.trustCaution || 0}</strong>
+      · SHADOW <strong>${summary.shadowEligible || 0}</strong>
+    </span>
   `;
 }
 
