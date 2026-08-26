@@ -1,53 +1,125 @@
-function clamp(
-  value,
-  min = 0,
-  max = 1
-) {
-  return Math.max(
-    min,
-    Math.min(
-      max,
-      value
-    )
-  );
+function clamp(value, min = 0, max = 1) {
+  return Math.max(min, Math.min(max, value));
 }
 
-function americanToProbability(
-  odds
-) {
-  const n =
-    Number(odds);
+function americanProbability(odds) {
+  const n = Number(odds);
 
-  if (!Number.isFinite(n)) {
+  if (!Number.isFinite(n)) return null;
+
+  if (n <= -100) {
+    return Math.abs(n) / (Math.abs(n) + 100);
+  }
+
+  if (n >= 100) {
+    return 100 / (n + 100);
+  }
+
+  return null;
+}
+
+function decimalToAmerican(decimal) {
+  const d = Number(decimal);
+
+  if (!Number.isFinite(d) || d <= 1) {
     return null;
   }
 
-  if (n < 0) {
-    return (
-      Math.abs(n) /
-      (
-        Math.abs(n) +
-        100
-      )
+  if (d >= 2) {
+    return Math.round(
+      (d - 1) * 100
     );
   }
 
-  if (n > 0) {
+  return Math.round(
+    -100 / (d - 1)
+  );
+}
+
+function americanToDecimal(american) {
+  const a = Number(american);
+
+  if (!Number.isFinite(a)) {
+    return null;
+  }
+
+  if (a <= -100) {
     return (
-      100 /
-      (
-        n +
-        100
-      )
+      1 +
+      100 / Math.abs(a)
+    );
+  }
+
+  if (a >= 100) {
+    return (
+      1 +
+      a / 100
     );
   }
 
   return null;
 }
 
-function fairAmerican(
-  probability
-) {
+function parseOdds(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return null;
+  }
+
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) {
+    return null;
+  }
+
+  /*
+   * 1.01–19.99 = decimal.
+   *
+   * Ej:
+   * 1.80
+   * 1.91
+   * 2.05
+   */
+  if (
+    n > 1 &&
+    n < 20
+  ) {
+    return {
+      original: n,
+      format: 'DECIMAL',
+      probability: 1 / n,
+      decimal: n,
+      american:
+        decimalToAmerican(n)
+    };
+  }
+
+  /*
+   * American válido:
+   * -110, -125, +105, +150...
+   */
+  if (
+    n <= -100 ||
+    n >= 100
+  ) {
+    return {
+      original: n,
+      format: 'AMERICAN',
+      probability:
+        americanProbability(n),
+      decimal:
+        americanToDecimal(n),
+      american: n
+    };
+  }
+
+  return null;
+}
+
+function fairAmerican(probability) {
   const p =
     clamp(
       probability,
@@ -57,22 +129,27 @@ function fairAmerican(
 
   if (p >= 0.5) {
     return Math.round(
-      -100 *
-      p /
-      (
-        1 -
-        p
-      )
+      -100 * p / (1 - p)
     );
   }
 
   return Math.round(
-    100 *
-    (
-      1 -
-      p
-    ) /
-    p
+    100 * (1 - p) / p
+  );
+}
+
+function fairDecimal(probability) {
+  const p =
+    clamp(
+      probability,
+      0.001,
+      0.999
+    );
+
+  return (
+    Math.round(
+      (1 / p) * 100
+    ) / 100
   );
 }
 
@@ -80,9 +157,7 @@ function probabilityAtLine(
   totals,
   line
 ) {
-  if (
-    !totals?.curve?.length
-  ) {
+  if (!totals?.curve?.length) {
     return null;
   }
 
@@ -90,37 +165,29 @@ function probabilityAtLine(
     [...totals.curve]
       .sort(
         (a, b) =>
-          a.line -
-          b.line
+          a.line - b.line
       );
 
   const exact =
     ordered.find(
       row =>
         Math.abs(
-          row.line -
-          line
+          row.line - line
         ) < 0.001
     );
 
   if (exact) {
     return {
       over:
-        Number(
-          exact.overPct
-        ) / 100,
+        Number(exact.overPct) /
+        100,
 
       under:
-        Number(
-          exact.underPct
-        ) / 100
+        Number(exact.underPct) /
+        100
     };
   }
 
-  /*
-   * Interpolación entre dos
-   * medias líneas conocidas.
-   */
   for (
     let i = 0;
     i < ordered.length - 1;
@@ -133,15 +200,12 @@ function probabilityAtLine(
       ordered[i + 1];
 
     if (
-      line >
-      left.line &&
-      line <
-      right.line
+      line > left.line &&
+      line < right.line
     ) {
       const ratio =
         (
-          line -
-          left.line
+          line - left.line
         ) /
         (
           right.line -
@@ -161,8 +225,7 @@ function probabilityAtLine(
           overPct / 100,
 
         under:
-          1 -
-          overPct / 100
+          1 - overPct / 100
       };
     }
   }
@@ -229,34 +292,29 @@ export function evaluateMarket(
         ?.qualityPct || 0
     );
 
-  /*
-   * Solo STABLE puede ser apuesta.
-   */
   const eligible =
     match.state === 'pre' &&
     match.matchup?.markovReady &&
     consensus === 'STABLE' &&
     quality >= 72;
 
-  const overMarketProbability =
-    americanToProbability(
+  const overPrice =
+    parseOdds(
       market.overOdds
     );
 
-  const underMarketProbability =
-    americanToProbability(
+  const underPrice =
+    parseOdds(
       market.underOdds
     );
 
-  /*
-   * Sin precio real no inventamos
-   * un -110 ni calculamos edge.
-   */
   const overBreakEven =
-    overMarketProbability;
+    overPrice?.probability ??
+    null;
 
   const underBreakEven =
-    underMarketProbability;
+    underPrice?.probability ??
+    null;
 
   const overEdge =
     overBreakEven !== null
@@ -341,12 +399,10 @@ export function evaluateMarket(
 
     model: {
       overPct:
-        probabilities.over *
-        100,
+        probabilities.over * 100,
 
       underPct:
-        probabilities.under *
-        100
+        probabilities.under * 100
     },
 
     market: {
@@ -356,34 +412,46 @@ export function evaluateMarket(
       underOdds:
         market.underOdds,
 
+      overFormat:
+        overPrice?.format || null,
+
+      underFormat:
+        underPrice?.format || null,
+
       overBreakEvenPct:
-        overBreakEven *
-        100,
+        overBreakEven !== null
+          ? overBreakEven * 100
+          : null,
 
       underBreakEvenPct:
-        underBreakEven *
-        100
+        underBreakEven !== null
+          ? underBreakEven * 100
+          : null
     },
 
     edge: {
       overPct:
-        overEdge *
-        100,
+        overEdge !== null
+          ? overEdge * 100
+          : null,
 
       underPct:
-        underEdge *
-        100
+        underEdge !== null
+          ? underEdge * 100
+          : null
     },
 
     bestSide,
 
     bestProbabilityPct:
-      bestProbability *
-      100,
+      bestProbability !== null
+        ? bestProbability * 100
+        : null,
 
     bestEdgePct:
-      bestEdge *
-      100,
+      bestEdge !== null
+        ? bestEdge * 100
+        : null,
 
     fairOdds:
       bestProbability !== null
@@ -392,8 +460,14 @@ export function evaluateMarket(
           )
         : null,
 
-    recommendation,
+    fairDecimal:
+      bestProbability !== null
+        ? fairDecimal(
+            bestProbability
+          )
+        : null,
 
+    recommendation,
     eligible,
 
     reason:

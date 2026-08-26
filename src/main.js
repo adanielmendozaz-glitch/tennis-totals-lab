@@ -103,7 +103,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.5.3</div>
+        <div class="version">ATP + WTA · v0.6.0</div>
       </div>
 
       <button
@@ -460,6 +460,35 @@ app.innerHTML = `
       </p>
       <span class="coming">BANK ENGINE · v0.4</span>
     </section>
+
+
+    <div
+      id="matchDetailOverlay"
+      class="match-detail-overlay hidden">
+
+      <div class="match-detail-toolbar">
+
+        <button
+          type="button"
+          data-close-detail>
+          ‹
+        </button>
+
+        <div>
+          <span>PARTIDO</span>
+          <strong id="matchDetailTitle">
+            Detalle
+          </strong>
+        </div>
+
+      </div>
+
+      <div
+        id="matchDetailContent"
+        class="match-detail-content">
+      </div>
+
+    </div>
 
     <nav class="bottom-nav" aria-label="Navegación principal">
       <button type="button" data-tab="today" class="selected">
@@ -997,6 +1026,13 @@ function marketOddsText(value) {
     return '—';
   }
 
+  if (
+    n > 1 &&
+    n < 20
+  ) {
+    return n.toFixed(2);
+  }
+
   return n > 0
     ? `+${n}`
     : `${n}`;
@@ -1139,9 +1175,10 @@ function marketPanel(match) {
                     <span>OVER</span>
                     <input
                       type="number"
-                      inputmode="numeric"
+                      inputmode="decimal"
+                      step="0.01"
                       data-manual-over
-                      placeholder="-110"
+                      placeholder="1.90 / -110"
                     />
                   </label>
 
@@ -1149,9 +1186,10 @@ function marketPanel(match) {
                     <span>UNDER</span>
                     <input
                       type="number"
-                      inputmode="numeric"
+                      inputmode="decimal"
+                      step="0.01"
                       data-manual-under
-                      placeholder="-110"
+                      placeholder="1.90 / -110"
                     />
                   </label>
 
@@ -1334,7 +1372,7 @@ function marketPanel(match) {
   `;
 }
 
-function matchCard(match) {
+function matchDetailContent(match) {
   const maxSets = Math.max(
     match.playerA.sets.length,
     match.playerB.sets.length,
@@ -1445,6 +1483,146 @@ function matchCard(match) {
   `;
 }
 
+
+function matchCard(match) {
+  const live =
+    match.state === 'in';
+
+  const final =
+    match.state === 'post';
+
+  const totals =
+    match.totals;
+
+  const decision =
+    match.marketDecision;
+
+  const readiness =
+    totals
+      ? getMarketReadiness(match)
+      : null;
+
+  const consensus =
+    totals
+      ?.diagnostics
+      ?.consensusStatus ||
+    match.matchup?.status ||
+    'WAIT';
+
+  const badge =
+    decision?.recommendation === 'PLAY'
+      ? 'PLAY'
+      : decision?.recommendation === 'LEAN'
+        ? 'LEAN'
+        : consensus;
+
+  const badgeClass =
+    String(badge)
+      .toLowerCase();
+
+  const statusText =
+    live
+      ? `● LIVE · ${match.status}`
+      : final
+        ? 'FINAL'
+        : formatTime(match.date);
+
+  const maxSets =
+    Math.max(
+      match.playerA.sets.length,
+      match.playerB.sets.length,
+      2
+    );
+
+  return `
+    <article
+      class="compact-match-card ${live ? 'live' : ''}"
+      data-open-match="${match.id}">
+
+      <div class="compact-head">
+
+        <div>
+          <span class="tour ${match.tour.toLowerCase()}">
+            ${match.tour}
+          </span>
+
+          <strong>
+            ${match.tournament}
+          </strong>
+        </div>
+
+        <span class="compact-time">
+          ${statusText}
+        </span>
+
+      </div>
+
+      <div class="compact-player">
+
+        ${flag(match.playerA)}
+
+        <strong>
+          ${match.playerA.name}
+        </strong>
+
+        <div class="compact-score">
+          ${scoreCells(
+            match.playerA,
+            maxSets
+          )}
+        </div>
+
+      </div>
+
+      <div class="compact-player">
+
+        ${flag(match.playerB)}
+
+        <strong>
+          ${match.playerB.name}
+        </strong>
+
+        <div class="compact-score">
+          ${scoreCells(
+            match.playerB,
+            maxSets
+          )}
+        </div>
+
+      </div>
+
+      <div class="compact-footer">
+
+        <span>
+          ${match.surface || '—'}
+        </span>
+
+        <span>
+          ${
+            totals
+              ? `EXP ${totals.expectedGames.toFixed(2)}`
+              : match.matchup?.status || 'WAIT'
+          }
+        </span>
+
+        <strong class="${badgeClass}">
+          ${badge}
+        </strong>
+
+        ${
+          readiness?.status === 'READY'
+            ? `<b>${readiness.score.toFixed(0)}%</b>`
+            : ''
+        }
+
+        <i>›</i>
+
+      </div>
+
+    </article>
+  `;
+}
+
 function filteredMatches() {
   if (activeTour === 'ATP') {
     return matches.filter(m => m.tour === 'ATP');
@@ -1482,7 +1660,9 @@ function rankingCard(
     item.category !== 'READY';
 
   return `
-    <article class="ranking-card ${item.category.toLowerCase()}">
+    <article
+      class="ranking-card ${item.category.toLowerCase()}"
+      data-open-match="${item.id}">
 
       <div class="ranking-card-top">
 
@@ -1597,13 +1777,19 @@ function rankingCard(
             <div class="ranking-waiting">
 
               <strong>
-                MODEL READY
+                ${
+                  item.hasMarket
+                    ? 'MODEL READY · NO EDGE'
+                    : 'MODEL READY'
+                }
               </strong>
 
               <span>
-                Readiness
-                ${item.readiness.toFixed(1)}%
-                · esperando línea O/U
+                ${
+                  item.hasMarket
+                    ? `Mercado analizado · ${item.provider} · Readiness ${item.readiness.toFixed(1)}%`
+                    : `Readiness ${item.readiness.toFixed(1)}% · esperando línea O/U`
+                }
               </span>
 
             </div>
@@ -2791,6 +2977,15 @@ document.addEventListener(
     );
 
     renderMatches();
+
+    if (
+      selectedMatchId ===
+      String(match.id)
+    ) {
+      openMatchDetail(
+        match.id
+      );
+    }
   }
 );
 
@@ -2871,6 +3066,101 @@ document.querySelectorAll('[data-filter]')
       renderMatches();
     });
   });
+
+
+let selectedMatchId = null;
+
+function openMatchDetail(matchId) {
+  const match =
+    matches.find(
+      item =>
+        String(item.id) ===
+        String(matchId)
+    );
+
+  if (!match) {
+    return;
+  }
+
+  selectedMatchId =
+    String(match.id);
+
+  const overlay =
+    document.querySelector(
+      '#matchDetailOverlay'
+    );
+
+  const content =
+    document.querySelector(
+      '#matchDetailContent'
+    );
+
+  const title =
+    document.querySelector(
+      '#matchDetailTitle'
+    );
+
+  title.textContent =
+    `${match.playerA.name} vs ${match.playerB.name}`;
+
+  content.innerHTML =
+    matchDetailContent(match);
+
+  overlay.classList.remove(
+    'hidden'
+  );
+
+  document.body.classList.add(
+    'detail-open'
+  );
+
+  overlay.scrollTop = 0;
+}
+
+function closeMatchDetail() {
+  selectedMatchId = null;
+
+  document
+    .querySelector(
+      '#matchDetailOverlay'
+    )
+    ?.classList.add(
+      'hidden'
+    );
+
+  document.body.classList.remove(
+    'detail-open'
+  );
+}
+
+document.addEventListener(
+  'click',
+  event => {
+
+    const opener =
+      event.target.closest(
+        '[data-open-match]'
+      );
+
+    if (opener) {
+      openMatchDetail(
+        opener.getAttribute(
+          'data-open-match'
+        )
+      );
+
+      return;
+    }
+
+    if (
+      event.target.closest(
+        '[data-close-detail]'
+      )
+    ) {
+      closeMatchDetail();
+    }
+  }
+);
 
 const viewMap = {
   today: '#todayView',

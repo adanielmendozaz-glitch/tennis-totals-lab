@@ -9,38 +9,16 @@ function clamp(
 ) {
   return Math.max(
     min,
-    Math.min(
-      max,
-      value
-    )
+    Math.min(max, value)
   );
 }
 
 function round1(value) {
   return (
     Math.round(
-      value *
-      10
+      value * 10
     ) / 10
   );
-}
-
-function recommendationPriority(
-  value
-) {
-  if (value === 'PLAY') {
-    return 3;
-  }
-
-  if (value === 'LEAN') {
-    return 2;
-  }
-
-  if (value === 'READY') {
-    return 1;
-  }
-
-  return 0;
 }
 
 function adjustedEdge(
@@ -52,7 +30,8 @@ function adjustedEdge(
     Math.max(
       0,
       Number(
-        decision?.bestEdgePct || 0
+        decision
+          ?.bestEdgePct || 0
       )
     );
 
@@ -76,18 +55,10 @@ function adjustedEdge(
       100
     );
 
-  /*
-   * Un DISAG de 0 pp conserva
-   * todo el edge.
-   *
-   * Conforme aumenta,
-   * reducimos la fortaleza.
-   */
   const agreementFactor =
     clamp(
       1 -
-      disagreement /
-      50,
+      disagreement / 50,
       0.45,
       1
     );
@@ -100,9 +71,7 @@ function adjustedEdge(
   );
 }
 
-function rankingItem(
-  match
-) {
+function rankingItem(match) {
   if (
     match.state !== 'pre' ||
     !match.matchup?.markovReady ||
@@ -112,9 +81,16 @@ function rankingItem(
   }
 
   const readiness =
-    getMarketReadiness(
-      match
-    );
+    getMarketReadiness(match);
+
+  if (
+    readiness.status !== 'READY'
+  ) {
+    return null;
+  }
+
+  const decision =
+    match.marketDecision;
 
   const quality =
     Number(
@@ -130,192 +106,137 @@ function rankingItem(
         ?.disagreementPct || 0
     );
 
-  const decision =
-    match.marketDecision;
+  let category = 'READY';
 
-  /*
-   * Mercado existente:
-   * únicamente PLAY o LEAN
-   * entran al ranking principal.
-   */
   if (
-    decision &&
-    decision.eligible &&
-    (
-      decision.recommendation ===
-      'PLAY' ||
-      decision.recommendation ===
+    decision?.eligible &&
+    decision.recommendation ===
+      'PLAY'
+  ) {
+    category = 'PLAY';
+  } else if (
+    decision?.eligible &&
+    decision.recommendation ===
       'LEAN'
-    )
   ) {
-    const adjEdge =
-      adjustedEdge(
-        match,
-        decision,
-        readiness
-      );
-
-    return {
-      id:
-        match.id,
-
-      category:
-        decision.recommendation,
-
-      priority:
-        recommendationPriority(
-          decision.recommendation
-        ),
-
-      tournament:
-        match.tournament,
-
-      tour:
-        match.tour,
-
-      surface:
-        match.surface,
-
-      startDate:
-        match.startDate,
-
-      playerA:
-        match.playerA?.name ||
-        '—',
-
-      playerB:
-        match.playerB?.name ||
-        '—',
-
-      line:
-        decision.line,
-
-      side:
-        decision.bestSide,
-
-      probabilityPct:
-        Number(
-          decision
-            .bestProbabilityPct || 0
-        ),
-
-      edgePct:
-        Number(
-          decision
-            .bestEdgePct || 0
-        ),
-
-      adjustedEdgePct:
-        round1(
-          adjEdge
-        ),
-
-      fairOdds:
-        decision.fairOdds,
-
-      provider:
-        decision.provider,
-
-      readiness:
-        readiness.score,
-
-      quality,
-
-      disagreement,
-
-      consensus:
-        match.totals
-          ?.diagnostics
-          ?.consensusStatus,
-
-      score:
-        (
-          recommendationPriority(
-            decision.recommendation
-          ) *
-          1000
-        ) +
-        adjEdge * 10 +
-        readiness.score / 10
-    };
+    category = 'LEAN';
   }
 
-  /*
-   * Modelo excelente pero todavía
-   * no existe línea de mercado.
-   */
-  if (
-    readiness.status === 'READY' &&
-    !decision
-  ) {
-    return {
-      id:
-        match.id,
+  const adjEdge =
+    decision
+      ? adjustedEdge(
+          match,
+          decision,
+          readiness
+        )
+      : null;
 
-      category:
-        'READY',
+  const priority =
+    category === 'PLAY'
+      ? 3
+      : category === 'LEAN'
+        ? 2
+        : 1;
 
-      priority: 1,
+  return {
+    id:
+      match.id,
 
-      tournament:
-        match.tournament,
+    category,
+    priority,
 
-      tour:
-        match.tour,
+    tournament:
+      match.tournament,
 
-      surface:
-        match.surface,
+    tour:
+      match.tour,
 
-      startDate:
-        match.startDate,
+    surface:
+      match.surface,
 
-      playerA:
-        match.playerA?.name ||
-        '—',
+    startDate:
+      match.startDate,
 
-      playerB:
-        match.playerB?.name ||
-        '—',
+    playerA:
+      match.playerA?.name ||
+      '—',
 
-      line: null,
-      side: null,
-      probabilityPct: null,
-      edgePct: null,
-      adjustedEdgePct: null,
-      fairOdds: null,
+    playerB:
+      match.playerB?.name ||
+      '—',
 
-      provider:
-        'WAITING',
+    hasMarket:
+      Boolean(decision),
 
-      readiness:
-        readiness.score,
+    line:
+      decision?.line ?? null,
 
-      quality,
+    side:
+      decision?.bestSide ??
+      null,
 
-      disagreement,
+    probabilityPct:
+      decision
+        ?.bestProbabilityPct ??
+      null,
 
-      consensus:
-        match.totals
-          ?.diagnostics
-          ?.consensusStatus,
+    edgePct:
+      decision
+        ?.bestEdgePct ??
+      null,
 
-      score:
-        1000 +
-        readiness.score
-    };
-  }
+    adjustedEdgePct:
+      adjEdge !== null
+        ? round1(adjEdge)
+        : null,
 
-  return null;
+    fairOdds:
+      decision?.fairOdds ??
+      null,
+
+    fairDecimal:
+      decision?.fairDecimal ??
+      null,
+
+    recommendation:
+      decision
+        ?.recommendation ??
+      null,
+
+    marketReason:
+      decision?.reason ??
+      'WAITING_MARKET',
+
+    provider:
+      decision?.provider ??
+      'WAITING',
+
+    readiness:
+      readiness.score,
+
+    quality,
+    disagreement,
+
+    consensus:
+      match.totals
+        ?.diagnostics
+        ?.consensusStatus,
+
+    score:
+      priority * 1000 +
+      (
+        adjEdge !== null
+          ? adjEdge * 10
+          : 0
+      ) +
+      readiness.score
+  };
 }
 
-export function buildRanking(
-  matches
-) {
+export function buildRanking(matches) {
   const items =
     matches
-      .map(
-        rankingItem
-      )
+      .map(rankingItem)
       .filter(Boolean)
       .sort(
         (a, b) => {
@@ -331,17 +252,10 @@ export function buildRanking(
           }
 
           if (
-            a.category === 'READY'
-          ) {
-            return (
-              b.readiness -
-              a.readiness
-            );
-          }
-
-          if (
+            a.adjustedEdgePct !== null &&
+            b.adjustedEdgePct !== null &&
             b.adjustedEdgePct !==
-            a.adjustedEdgePct
+              a.adjustedEdgePct
           ) {
             return (
               b.adjustedEdgePct -
