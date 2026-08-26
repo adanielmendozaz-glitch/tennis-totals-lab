@@ -5,6 +5,7 @@ import { enrichMatchesWithMatchup } from './engine/matchup.js';
 import { getMatchMarkets } from './data/espnOdds.js';
 import { evaluateMarket } from './engine/market.js';
 import { getMarketReadiness } from './engine/readiness.js';
+import { buildRanking } from './engine/ranking.js';
 
 const app = document.querySelector('#app');
 
@@ -102,7 +103,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.5.2</div>
+        <div class="version">ATP + WTA · v0.5.3</div>
       </div>
 
       <button
@@ -386,14 +387,48 @@ app.innerHTML = `
       <section id="matches" class="matches"></section>
     </section>
 
-    <section id="rankingView" class="view empty-view">
-      <div class="empty-icon">🏆</div>
-      <h2>Ranking</h2>
-      <p>
-        Aquí vivirá el ranking diario de Over / Under
-        cuando activemos el Totals Engine.
-      </p>
-      <span class="coming">ENGINE PENDIENTE · v0.3</span>
+    <section
+      id="rankingView"
+      class="view ranking-view">
+
+      <div class="ranking-header">
+        <div>
+          <span>VALUE ENGINE</span>
+          <h2>Ranking del día</h2>
+        </div>
+
+        <strong>PRE-MATCH</strong>
+      </div>
+
+      <div class="ranking-metrics">
+
+        <div>
+          <span>PLAY</span>
+          <strong id="rankingPlay">0</strong>
+        </div>
+
+        <div>
+          <span>LEAN</span>
+          <strong id="rankingLean">0</strong>
+        </div>
+
+        <div>
+          <span>MODEL READY</span>
+          <strong id="rankingReady">0</strong>
+        </div>
+
+      </div>
+
+      <div
+        id="rankingList"
+        class="ranking-list">
+
+        <div class="ranking-empty">
+          Calculando candidatos...
+        </div>
+
+      </div>
+
     </section>
 
     <section id="censoView" class="view empty-view">
@@ -1426,7 +1461,262 @@ function filteredMatches() {
   return matches;
 }
 
+function rankingOdds(value) {
+  const n =
+    Number(value);
+
+  if (!Number.isFinite(n)) {
+    return '—';
+  }
+
+  return n > 0
+    ? `+${n}`
+    : `${n}`;
+}
+
+function rankingCard(
+  item,
+  position
+) {
+  const valueMarket =
+    item.category !== 'READY';
+
+  return `
+    <article class="ranking-card ${item.category.toLowerCase()}">
+
+      <div class="ranking-card-top">
+
+        <div class="ranking-position">
+          #${position}
+        </div>
+
+        <div class="ranking-event">
+          <span>
+            ${item.tour}
+            · ${item.surface}
+          </span>
+
+          <strong>
+            ${item.tournament}
+          </strong>
+        </div>
+
+        <div class="ranking-badge ${item.category.toLowerCase()}">
+          ${item.category}
+        </div>
+
+      </div>
+
+      <div class="ranking-players">
+
+        <strong>
+          ${item.playerA}
+        </strong>
+
+        <span>vs</span>
+
+        <strong>
+          ${item.playerB}
+        </strong>
+
+      </div>
+
+      ${
+        valueMarket
+          ? `
+            <div class="ranking-market">
+
+              <div>
+                <span>PICK</span>
+                <strong>
+                  ${item.side}
+                  ${Number(item.line).toFixed(1)}
+                </strong>
+              </div>
+
+              <div>
+                <span>MODEL</span>
+                <strong>
+                  ${item.probabilityPct.toFixed(1)}%
+                </strong>
+              </div>
+
+              <div>
+                <span>EDGE</span>
+                <strong>
+                  +${item.edgePct.toFixed(1)} pp
+                </strong>
+              </div>
+
+              <div>
+                <span>EDGE AJ.</span>
+                <strong>
+                  +${item.adjustedEdgePct.toFixed(1)} pp
+                </strong>
+              </div>
+
+            </div>
+
+            <div class="ranking-details">
+
+              <span>
+                FAIR
+                <strong>
+                  ${rankingOdds(item.fairOdds)}
+                </strong>
+              </span>
+
+              <span>
+                READINESS
+                <strong>
+                  ${item.readiness.toFixed(1)}%
+                </strong>
+              </span>
+
+              <span>
+                QUALITY
+                <strong>
+                  ${item.quality.toFixed(1)}%
+                </strong>
+              </span>
+
+              <span>
+                DISAG
+                <strong>
+                  ${item.disagreement.toFixed(1)} pp
+                </strong>
+              </span>
+
+            </div>
+
+            <div class="ranking-source">
+              MARKET · ${item.provider}
+            </div>
+          `
+          : `
+            <div class="ranking-waiting">
+
+              <strong>
+                MODEL READY
+              </strong>
+
+              <span>
+                Readiness
+                ${item.readiness.toFixed(1)}%
+                · esperando línea O/U
+              </span>
+
+            </div>
+
+            <div class="ranking-details">
+
+              <span>
+                QUALITY
+                <strong>
+                  ${item.quality.toFixed(1)}%
+                </strong>
+              </span>
+
+              <span>
+                DISAG
+                <strong>
+                  ${item.disagreement.toFixed(1)} pp
+                </strong>
+              </span>
+
+              <span>
+                CONSENSUS
+                <strong>
+                  ${item.consensus}
+                </strong>
+              </span>
+
+            </div>
+          `
+      }
+
+    </article>
+  `;
+}
+
+function renderRanking() {
+  const ranking =
+    buildRanking(
+      matches
+    );
+
+  const list =
+    document.querySelector(
+      '#rankingList'
+    );
+
+  const play =
+    document.querySelector(
+      '#rankingPlay'
+    );
+
+  const lean =
+    document.querySelector(
+      '#rankingLean'
+    );
+
+  const ready =
+    document.querySelector(
+      '#rankingReady'
+    );
+
+  if (
+    !list ||
+    !play ||
+    !lean ||
+    !ready
+  ) {
+    return;
+  }
+
+  play.textContent =
+    ranking.counts.play;
+
+  lean.textContent =
+    ranking.counts.lean;
+
+  ready.textContent =
+    ranking.counts.ready;
+
+  if (!ranking.items.length) {
+    list.innerHTML = `
+      <div class="ranking-empty">
+
+        <strong>
+          Sin candidatos todavía
+        </strong>
+
+        <span>
+          PLAY / LEAN aparecerán aquí
+          cuando exista edge válido.
+        </span>
+
+      </div>
+    `;
+
+    return;
+  }
+
+  list.innerHTML =
+    ranking.items
+      .map(
+        (item, index) =>
+          rankingCard(
+            item,
+            index + 1
+          )
+      )
+      .join('');
+}
+
 function renderMatches() {
+  renderRanking();
+
   const list = filteredMatches();
 
   if (!list.length) {
