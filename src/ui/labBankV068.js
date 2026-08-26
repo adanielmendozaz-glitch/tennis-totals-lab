@@ -294,7 +294,7 @@ function installBankHardening() {
 
   if (headerVersion) {
     headerVersion.textContent =
-      'v0.6.8';
+      'v0.6.9';
   }
 
   if (

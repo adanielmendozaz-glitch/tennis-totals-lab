@@ -5,6 +5,11 @@ import './v063-ui.js';
 import {
   renderDirectionAudit
 } from './v0681-ui.js';
+
+import {
+  renderMatchLengthAudit
+} from './v0682-ui.js';
+
 import { getTodayMatches } from './data/espn.js';
 import { enrichMatchesWithStats } from './engine/playerStats.js';
 import { enrichMatchesWithMatchup } from './engine/matchup.js';
@@ -125,7 +130,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.8.1</div>
+        <div class="version">ATP + WTA · v0.6.9</div>
       </div>
 
       <button
@@ -1018,6 +1023,32 @@ function totalsFingerprint(match) {
     match.matchup?.playerB?.servePointPct,
     match.matchup?.playerA?.holdPct,
     match.matchup?.playerB?.holdPct,
+
+    match.playerA
+      ?.profile
+      ?.holdPct,
+
+    match.playerA
+      ?.profile
+      ?.breakPct,
+
+    match.playerA
+      ?.profile
+      ?.ratingBlend,
+
+    match.playerB
+      ?.profile
+      ?.holdPct,
+
+    match.playerB
+      ?.profile
+      ?.breakPct,
+
+    match.playerB
+      ?.profile
+      ?.ratingBlend,
+
+    'ML-0.1.0',
     TOTALS_SIMULATIONS
   ].join('|');
 }
@@ -1037,6 +1068,206 @@ function curveForDisplay(totals) {
       (a, b) =>
         a.line - b.line
     );
+}
+
+function matchLengthPanel(
+  match,
+  totals
+) {
+  const audit =
+    totals?.lengthAudit;
+
+  if (!audit) {
+    return '';
+  }
+
+  const calibration =
+    audit.calibration || {};
+
+  const status =
+    audit.status ||
+    'UNKNOWN';
+
+  const score =
+    audit.scoreProbabilities ||
+    {};
+
+  const scoreRows =
+    totals.bestOf === 3
+      ? [
+          ['2-0 A', score['2-0']],
+          ['2-1 A', score['2-1']],
+          ['0-2 B', score['0-2']],
+          ['1-2 B', score['1-2']]
+        ]
+      : [];
+
+  const holdBefore =
+    Number.isFinite(
+      Number(
+        calibration
+          .baseHoldGapPp
+      )
+    )
+      ? Number(
+          calibration
+            .baseHoldGapPp
+        ).toFixed(1)
+      : '—';
+
+  const holdAfter =
+    Number.isFinite(
+      Number(
+        calibration
+          .calibratedHoldGapPp
+      )
+    )
+      ? Number(
+          calibration
+            .calibratedHoldGapPp
+        ).toFixed(1)
+      : '—';
+
+  const strength =
+    Number.isFinite(
+      Number(
+        calibration
+          .strengthGapPp
+      )
+    )
+      ? `${
+          Number(
+            calibration
+              .strengthGapPp
+          ) >= 0
+            ? '+'
+            : ''
+        }${Number(
+          calibration
+            .strengthGapPp
+        ).toFixed(2)}`
+      : '—';
+
+  return `
+    <div class="match-length-card ${status.toLowerCase()}">
+
+      <div class="match-length-card-head">
+        <div>
+          <span>MATCH LENGTH · FAIR LINE</span>
+          <strong>
+            ${calibration.dominantSide === 'A'
+              ? `${match.playerA.shortName || match.playerA.name} EDGE`
+              : calibration.dominantSide === 'B'
+                ? `${match.playerB.shortName || match.playerB.name} EDGE`
+                : 'BALANCED'}
+          </strong>
+        </div>
+
+        <b>${status}</b>
+      </div>
+
+      <div class="match-length-card-grid">
+
+        <div>
+          <span>FAIR TOTAL</span>
+          <strong>
+            ${audit.fairLine !== null
+              ? audit.fairLine.toFixed(1)
+              : '—'}
+          </strong>
+        </div>
+
+        <div>
+          <span>A MATCH WIN</span>
+          <strong>
+            ${audit.matchWinPctA.toFixed(1)}%
+          </strong>
+        </div>
+
+        <div>
+          <span>B MATCH WIN</span>
+          <strong>
+            ${audit.matchWinPctB.toFixed(1)}%
+          </strong>
+        </div>
+
+        <div>
+          <span>STRAIGHT SETS</span>
+          <strong>
+            ${audit.straightSetsPct.toFixed(1)}%
+          </strong>
+        </div>
+
+        <div>
+          <span>DECIDING SET</span>
+          <strong>
+            ${audit.decidingSetPct.toFixed(1)}%
+          </strong>
+        </div>
+
+        <div>
+          <span>STRENGTH GAP</span>
+          <strong>
+            ${strength} pp
+          </strong>
+        </div>
+
+        <div>
+          <span>HOLD GAP</span>
+          <strong>
+            ${holdBefore} → ${holdAfter} pp
+          </strong>
+        </div>
+
+        <div>
+          <span>EVIDENCE</span>
+          <strong>
+            ${Number(
+              calibration
+                .evidencePct || 0
+            ).toFixed(1)}%
+          </strong>
+        </div>
+
+      </div>
+
+      ${
+        scoreRows.length
+          ? `
+            <div class="match-length-scorelines">
+              ${scoreRows.map(
+                ([label, value]) => `
+                  <span>
+                    ${label}
+                    <strong>
+                      ${Number(value || 0).toFixed(1)}%
+                    </strong>
+                  </span>
+                `
+              ).join('')}
+            </div>
+          `
+          : ''
+      }
+
+      ${
+        status === 'COMPRESSION'
+          ? `
+            <div class="match-length-warning">
+              LENGTH COMPRESSION · MARKET BLOQUEADO
+            </div>
+          `
+          : status === 'WATCH'
+            ? `
+              <div class="match-length-watch">
+                LENGTH WATCH · revisar diferencia de fuerza
+              </div>
+            `
+            : ''
+      }
+
+    </div>
+  `;
 }
 
 function totalsPanel(match) {
@@ -1201,6 +1432,11 @@ function totalsPanel(match) {
         </span>
 
       </div>
+
+      ${matchLengthPanel(
+        match,
+        totals
+      )}
 
       ${
         totals.shadowAudit?.available
@@ -2466,6 +2702,7 @@ function renderMatches() {
   renderCenso();
   renderLabBank();
   renderDirectionAudit(matches);
+  renderMatchLengthAudit(matches);
 
   const list = filteredMatches();
 

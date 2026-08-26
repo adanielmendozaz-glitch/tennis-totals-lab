@@ -443,7 +443,16 @@ function simulateMatch(
   return {
     totalGames,
     tiebreaks,
-    setsPlayed
+    setsPlayed,
+
+    setsA,
+    setsB,
+
+    winner:
+      setsA >
+      setsB
+        ? 0
+        : 1
   };
 }
 
@@ -598,7 +607,7 @@ export function simulateMatchTotals(
       ) / 100
     );
 
-  const holdA =
+  const baseHoldA =
     clamp(
       Number(
         matchup
@@ -607,13 +616,37 @@ export function simulateMatchTotals(
       ) / 100
     );
 
-  const holdB =
+  const baseHoldB =
     clamp(
       Number(
         matchup
           .playerB
           .holdPct
       ) / 100
+    );
+
+  const holdShiftA =
+    Number(
+      match.lengthCalibration
+        ?.holdShiftAPp || 0
+    ) / 100;
+
+  const holdShiftB =
+    Number(
+      match.lengthCalibration
+        ?.holdShiftBPp || 0
+    ) / 100;
+
+  const holdA =
+    clamp(
+      baseHoldA +
+      holdShiftA
+    );
+
+  const holdB =
+    clamp(
+      baseHoldB +
+      holdShiftB
     );
 
   const bestOf =
@@ -628,6 +661,8 @@ export function simulateMatchTotals(
       serveB.toFixed(5),
       holdA.toFixed(5),
       holdB.toFixed(5),
+      holdShiftA.toFixed(5),
+      holdShiftB.toFixed(5),
       bestOf,
       simulations
     ].join('|');
@@ -655,6 +690,14 @@ export function simulateMatchTotals(
 
   let decidingSets = 0;
   let straightSets = 0;
+
+  let matchWinsA = 0;
+  let matchWinsB = 0;
+
+  let setsWonA = 0;
+  let setsWonB = 0;
+
+  const scoreCounts = {};
 
   const setsNeeded =
     Math.floor(
@@ -691,6 +734,32 @@ export function simulateMatchTotals(
 
     sumSets +=
       result.setsPlayed;
+
+    setsWonA +=
+      result.setsA;
+
+    setsWonB +=
+      result.setsB;
+
+    if (
+      result.winner === 0
+    ) {
+      matchWinsA++;
+    } else {
+      matchWinsB++;
+    }
+
+    const scoreKey =
+      `${result.setsA}-${result.setsB}`;
+
+    scoreCounts[
+      scoreKey
+    ] =
+      (
+        scoreCounts[
+          scoreKey
+        ] || 0
+      ) + 1;
 
     totalTiebreaks +=
       result.tiebreaks;
@@ -744,8 +813,27 @@ export function simulateMatchTotals(
       simulations
     );
 
+  const totalSetsWon =
+    setsWonA +
+    setsWonB;
+
+  const scoreProbabilities =
+    Object.fromEntries(
+      Object.entries(
+        scoreCounts
+      ).map(
+        ([key, count]) => [
+          key,
+          pct(
+            count /
+            simulations
+          )
+        ]
+      )
+    );
+
   return {
-    version: 'MC-0.3.0',
+    version: 'MC-0.4.0-LENGTH',
 
     mode: 'PREMATCH',
 
@@ -790,6 +878,84 @@ export function simulateMatchTotals(
         straightSets /
         simulations
       ),
+
+    matchWinPctA:
+      pct(
+        matchWinsA /
+        simulations
+      ),
+
+    matchWinPctB:
+      pct(
+        matchWinsB /
+        simulations
+      ),
+
+    setWinPctA:
+      totalSetsWon
+        ? pct(
+            setsWonA /
+            totalSetsWon
+          )
+        : 50,
+
+    setWinPctB:
+      totalSetsWon
+        ? pct(
+            setsWonB /
+            totalSetsWon
+          )
+        : 50,
+
+    scoreProbabilities,
+
+    lengthCalibration: {
+      version:
+        match.lengthCalibration
+          ?.version ||
+        null,
+
+      status:
+        match.lengthCalibration
+          ?.status ||
+        'OFF',
+
+      baseHoldAPct:
+        Math.round(
+          baseHoldA *
+          10000
+        ) / 100,
+
+      baseHoldBPct:
+        Math.round(
+          baseHoldB *
+          10000
+        ) / 100,
+
+      finalHoldAPct:
+        Math.round(
+          holdA *
+          10000
+        ) / 100,
+
+      finalHoldBPct:
+        Math.round(
+          holdB *
+          10000
+        ) / 100,
+
+      holdShiftAPp:
+        Math.round(
+          holdShiftA *
+          10000
+        ) / 100,
+
+      holdShiftBPp:
+        Math.round(
+          holdShiftB *
+          10000
+        ) / 100
+    },
 
     tiebreakPct:
       pct(

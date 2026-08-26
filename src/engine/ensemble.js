@@ -10,6 +10,11 @@ import {
   simulateEloTotals
 } from './eloLength.js';
 
+import {
+  prepareMatchLength,
+  fairLineFromCurve
+} from './matchLength.js';
+
 /*
  * v0.6.8.1 ENSEMBLE DE-CORRELATION
  *
@@ -298,27 +303,304 @@ export function decorrelatedWeights(
   };
 }
 
-function weightedMetric(
+export function weightedMetric(
   structural,
   bayesian,
   elo,
   weights,
   key
 ) {
+  const sources = [
+    [structural, weights.structural],
+    [bayesian, weights.bayesian],
+    [elo, weights.elo]
+  ];
+
+  let weighted = 0;
+  let availableWeight = 0;
+
+  for (const [model, weight] of sources) {
+    const raw =
+      model?.[key];
+
+    if (
+      raw === null ||
+      raw === undefined ||
+      raw === ''
+    ) {
+      continue;
+    }
+
+    const value =
+      Number(raw);
+
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+
+    weighted +=
+      weight * value;
+
+    availableWeight +=
+      weight;
+  }
+
+  if (availableWeight <= 0) {
+    return 0;
+  }
+
   return (
-    weights.structural *
-    Number(
-      structural[key] || 0
-    ) +
-    weights.bayesian *
-    Number(
-      bayesian[key] || 0
-    ) +
-    weights.elo *
-    Number(
-      elo[key] || 0
-    )
+    weighted /
+    availableWeight
   );
+}
+
+export function weightedScoreProbability(
+  structural,
+  bayesian,
+  elo,
+  weights,
+  key
+) {
+  const sources = [
+    [
+      structural?.scoreProbabilities,
+      weights.structural
+    ],
+    [
+      bayesian?.scoreProbabilities,
+      weights.bayesian
+    ],
+    [
+      elo?.scoreProbabilities,
+      weights.elo
+    ]
+  ];
+
+  let weighted = 0;
+  let availableWeight = 0;
+
+  for (const [scores, weight] of sources) {
+    const raw =
+      scores?.[key];
+
+    if (
+      raw === null ||
+      raw === undefined ||
+      raw === ''
+    ) {
+      continue;
+    }
+
+    const value =
+      Number(raw);
+
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+
+    weighted +=
+      weight * value;
+
+    availableWeight +=
+      weight;
+  }
+
+  if (availableWeight <= 0) {
+    return 0;
+  }
+
+  return (
+    weighted /
+    availableWeight
+  );
+}
+
+function buildLengthAudit(
+  structural,
+  bayesian,
+  elo,
+  weights,
+  curve,
+  calibration
+) {
+  const decidingSetPct =
+    weightedMetric(
+      structural,
+      bayesian,
+      elo,
+      weights,
+      'decidingSetPct'
+    );
+
+  const straightSetsPct =
+    weightedMetric(
+      structural,
+      bayesian,
+      elo,
+      weights,
+      'straightSetsPct'
+    );
+
+  const matchWinPctA =
+    weightedMetric(
+      structural,
+      bayesian,
+      elo,
+      weights,
+      'matchWinPctA'
+    );
+
+  const matchWinPctB =
+    weightedMetric(
+      structural,
+      bayesian,
+      elo,
+      weights,
+      'matchWinPctB'
+    );
+
+  const setWinPctA =
+    weightedMetric(
+      structural,
+      bayesian,
+      elo,
+      weights,
+      'setWinPctA'
+    );
+
+  const setWinPctB =
+    weightedMetric(
+      structural,
+      bayesian,
+      elo,
+      weights,
+      'setWinPctB'
+    );
+
+  const keys =
+    new Set([
+      ...Object.keys(
+        structural
+          .scoreProbabilities ||
+        {}
+      ),
+      ...Object.keys(
+        bayesian
+          .scoreProbabilities ||
+        {}
+      ),
+      ...Object.keys(
+        elo
+          .scoreProbabilities ||
+        {}
+      )
+    ]);
+
+  const scoreProbabilities =
+    Object.fromEntries(
+      [...keys].map(
+        key => [
+          key,
+          round1(
+            weightedScoreProbability(
+              structural,
+              bayesian,
+              elo,
+              weights,
+              key
+            )
+          )
+        ]
+      )
+    );
+
+  const fair =
+    fairLineFromCurve(
+      curve
+    );
+
+  const strengthAbs =
+    Math.abs(
+      Number(
+        calibration
+          ?.strengthGapPp ||
+        0
+      )
+    );
+
+  let status =
+    'OK';
+
+  if (
+    strengthAbs >= 3.5 &&
+    decidingSetPct >= 47.5
+  ) {
+    status =
+      'COMPRESSION';
+
+  } else if (
+    strengthAbs >= 2.5 &&
+    decidingSetPct >= 45.5
+  ) {
+    status =
+      'WATCH';
+  }
+
+  return {
+    version:
+      'MATCH-LENGTH-0.1.0',
+
+    status,
+
+    fairLine:
+      fair?.line ??
+      null,
+
+    fairOverPct:
+      fair?.overPct ??
+      null,
+
+    fairUnderPct:
+      fair?.underPct ??
+      null,
+
+    matchWinPctA:
+      round1(
+        matchWinPctA
+      ),
+
+    matchWinPctB:
+      round1(
+        matchWinPctB
+      ),
+
+    setWinPctA:
+      round1(
+        setWinPctA
+      ),
+
+    setWinPctB:
+      round1(
+        setWinPctB
+      ),
+
+    straightSetsPct:
+      round1(
+        straightSetsPct
+      ),
+
+    decidingSetPct:
+      round1(
+        decidingSetPct
+      ),
+
+    scoreProbabilities,
+
+    calibration:
+      calibration ||
+      null
+  };
 }
 
 function consensusStatus(
@@ -346,9 +628,14 @@ export function simulateEnsembleTotals(
   match,
   structuralSimulations = 40000
 ) {
+  const preparedMatch =
+    prepareMatchLength(
+      match
+    );
+
   const structural =
     simulateMatchTotals(
-      match,
+      preparedMatch,
       structuralSimulations
     );
 
@@ -360,14 +647,14 @@ export function simulateEnsembleTotals(
 
   const bayesian =
     simulateBayesianTotals(
-      match,
+      preparedMatch,
       targetLines,
       40000
     );
 
   const elo =
     simulateEloTotals(
-      match,
+      preparedMatch,
       20000
     );
 
@@ -574,6 +861,17 @@ export function simulateEnsembleTotals(
       'expectedGames'
     );
 
+  const lengthAudit =
+    buildLengthAudit(
+      structural,
+      bayesian,
+      elo,
+      weights,
+      curve,
+      preparedMatch
+        .lengthCalibration
+    );
+
   const variance =
     weights.structural *
     (
@@ -598,7 +896,7 @@ export function simulateEnsembleTotals(
 
   return {
     version:
-      'ENSEMBLE-0.5.0-BIASGUARD',
+      'ENSEMBLE-0.6.0-FAIRLINE',
 
     mode:
       'ENSEMBLE',
@@ -697,6 +995,8 @@ export function simulateEnsembleTotals(
 
     curve,
 
+    lengthAudit,
+
     weights: {
       structural:
         round1(
@@ -747,6 +1047,12 @@ export function simulateEnsembleTotals(
 
       correlationGuard:
         true,
+
+      lengthStatus:
+        lengthAudit.status,
+
+      fairLine:
+        lengthAudit.fairLine,
 
       consensusStatus:
         consensus,

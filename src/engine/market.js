@@ -384,10 +384,21 @@ export function evaluateMarket(
       market.line
     );
 
+  const lengthStatus =
+    match.totals
+      ?.lengthAudit
+      ?.status ||
+    'UNKNOWN';
+
+  const lengthBlocked =
+    lengthStatus ===
+    'COMPRESSION';
+
   const eligible =
     readiness.eligible &&
     !shadowBlocked &&
-    !biasGuard.blocked;
+    !biasGuard.blocked &&
+    !lengthBlocked;
 
   const overPrice =
     parseOdds(
@@ -583,7 +594,11 @@ export function evaluateMarket(
         biasGuard.status,
 
       biasGuardBlocked:
-        biasGuard.blocked
+        biasGuard.blocked,
+
+      lengthStatus,
+
+      lengthBlocked
     },
 
     reason:
@@ -595,7 +610,9 @@ export function evaluateMarket(
                 ? 'SHADOW_CAUTION'
                 : biasGuard.blocked
                   ? 'MODEL_MARKET_GAP'
-                  : 'DATA_GATE'
+                  : lengthBlocked
+                    ? 'LENGTH_COMPRESSION'
+                    : 'DATA_GATE'
           )
         : bestSide === null
           ? 'NO_PRICE'

@@ -10,6 +10,10 @@ import {
   shadowDriftStatus
 } from '../engine/dataTrust.js';
 
+import {
+  prepareMatchLength
+} from '../engine/matchLength.js';
+
 function round1(value) {
   return Math.round(Number(value || 0) * 10) / 10;
 }
@@ -46,8 +50,61 @@ self.onmessage = event => {
 
       if (shadowCore?.markovReady) {
         try {
-          const coverageMarkov = simulateMatchTotals(match, 5000);
-          const coreMarkov = simulateMatchTotals({ ...match, matchup: shadowCore }, 5000);
+          const coveragePrepared =
+            prepareMatchLength(
+              match
+            );
+
+          const coreMatch = {
+            ...match,
+
+            playerA: {
+              ...match.playerA,
+              profile:
+                match.playerA
+                  ?.coreProfile ||
+                match.playerA
+                  ?.profile
+            },
+
+            playerB: {
+              ...match.playerB,
+              profile:
+                match.playerB
+                  ?.coreProfile ||
+                match.playerB
+                  ?.profile
+            },
+
+            matchup: {
+              ...shadowCore,
+
+              baseline:
+                match.matchup
+                  ?.baseline,
+
+              dataTrust:
+                match.matchup
+                  ?.dataTrust
+            }
+          };
+
+          const corePrepared =
+            prepareMatchLength(
+              coreMatch
+            );
+
+          const coverageMarkov =
+            simulateMatchTotals(
+              coveragePrepared,
+              5000
+            );
+
+          const coreMarkov =
+            simulateMatchTotals(
+              corePrepared,
+              5000
+            );
           const expectedDelta = round2(coverageMarkov.expectedGames - coreMarkov.expectedGames);
           const delta = curveDelta(coverageMarkov.curve, coreMarkov.curve);
 
