@@ -2,6 +2,11 @@ import {
   getMarketReadiness
 } from './readiness.js';
 
+import {
+  normalizeStakeUnits,
+  profitUnitsFor
+} from './wager.js';
+
 const STORAGE_KEY =
   'tennis_totals_lab_censo_v1';
 
@@ -83,12 +88,26 @@ function selectedOdds(
 }
 
 export function captureCenso(
-  match
+  match,
+  options = {}
 ) {
   if (!match) {
     return {
       ok: false,
       reason: 'MATCH_MISSING'
+    };
+  }
+
+  const stakeUnits =
+    normalizeStakeUnits(
+      options.stakeUnits ?? 1,
+      null
+    );
+
+  if (!stakeUnits) {
+    return {
+      ok: false,
+      reason: 'INVALID_STAKE'
     };
   }
 
@@ -145,7 +164,7 @@ export function captureCenso(
 
   const entry = {
     appVersion:
-      '0.6.6',
+      '0.6.7',
 
     modelVersion:
       match.totals?.version ??
@@ -359,6 +378,8 @@ export function captureCenso(
       decision.provider ||
       'UNKNOWN',
 
+    stakeUnits,
+
     modelPct:
       Number(
         decision.bestProbabilityPct || 0
@@ -434,6 +455,8 @@ export function captureCenso(
       totalGames: null,
 
       settledAt: null,
+
+      profitUnits: null,
 
       note: null
     }
@@ -570,6 +593,8 @@ export function settleCensoFromMatches(
         settledAt:
           new Date().toISOString(),
 
+        profitUnits: null,
+
         note:
           match.status ||
           'Resultado requiere revisión'
@@ -594,6 +619,8 @@ export function settleCensoFromMatches(
         settledAt:
           new Date().toISOString(),
 
+        profitUnits: null,
+
         note:
           'Marcador final incompleto'
       };
@@ -602,19 +629,32 @@ export function settleCensoFromMatches(
       continue;
     }
 
+    const status =
+      settleResult(
+        entry.side,
+        entry.line,
+        games
+      );
+
     entry.result = {
-      status:
-        settleResult(
-          entry.side,
-          entry.line,
-          games
-        ),
+      status,
 
       totalGames:
         games,
 
       settledAt:
         new Date().toISOString(),
+
+      profitUnits:
+        profitUnitsFor({
+          status,
+          stakeUnits:
+            entry.stakeUnits,
+          odds:
+            entry.odds,
+          oddsFormat:
+            entry.oddsFormat
+        }),
 
       note: null
     };
