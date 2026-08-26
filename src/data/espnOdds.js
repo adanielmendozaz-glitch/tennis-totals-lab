@@ -5,6 +5,77 @@ import {
 const CORE =
   'https://sports.core.api.espn.com/v2/sports/tennis/leagues';
 
+const diagnostics =
+  new Map();
+
+function diagnosticId(matchOrId) {
+  if (
+    matchOrId &&
+    typeof matchOrId === 'object'
+  ) {
+    return String(
+      matchOrId.id || ''
+    );
+  }
+
+  return String(
+    matchOrId || ''
+  );
+}
+
+function setDiagnostic(
+  match,
+  status,
+  message,
+  extra = {}
+) {
+  const observedAt =
+    new Date().toISOString();
+
+  const diagnostic = {
+    status,
+    message,
+    observedAt,
+    ...extra
+  };
+
+  const id =
+    diagnosticId(match);
+
+  if (id) {
+    diagnostics.set(
+      id,
+      diagnostic
+    );
+  }
+
+  if (
+    match &&
+    typeof match === 'object'
+  ) {
+    match.marketDiagnostic =
+      diagnostic;
+
+    match.marketObservedAt =
+      observedAt;
+  }
+
+  return diagnostic;
+}
+
+export function getMarketDiagnostic(
+  matchOrId
+) {
+  return (
+    diagnostics.get(
+      diagnosticId(
+        matchOrId
+      )
+    ) ||
+    null
+  );
+}
+
 async function requestJson(url) {
   try {
     const response =
@@ -128,6 +199,16 @@ function normalizeOdds(item) {
   };
 }
 
+function hasRawTotal(item) {
+  return (
+    item?.overUnder !== null &&
+    item?.overUnder !== undefined &&
+    String(
+      item.overUnder
+    ).trim() !== ''
+  );
+}
+
 export async function getMatchMarkets(
   match
 ) {
@@ -137,6 +218,12 @@ export async function getMatchMarkets(
       match?.tour
     )
   ) {
+    setDiagnostic(
+      match,
+      'INVALID_REQUEST',
+      'Partido sin identificador ATP/WTA válido.'
+    );
+
     return [];
   }
 
@@ -159,6 +246,12 @@ export async function getMatchMarkets(
     !eventId ||
     !competitionId
   ) {
+    setDiagnostic(
+      match,
+      'INVALID_REQUEST',
+      'ESPN no entregó eventId/competitionId.'
+    );
+
     return [];
   }
 
@@ -170,7 +263,25 @@ export async function getMatchMarkets(
       await requestJson(url);
 
     const items =
-      payload?.items || [];
+      Array.isArray(
+        payload?.items
+      )
+        ? payload.items
+        : [];
+
+    if (!items.length) {
+      setDiagnostic(
+        match,
+        'NO_MARKET',
+        'ESPN respondió correctamente, pero no publicó mercado O/U.',
+        {
+          received: 0,
+          parsed: 0
+        }
+      );
+
+      return [];
+    }
 
     const resolved =
       await Promise.all(
@@ -179,13 +290,80 @@ export async function getMatchMarkets(
         )
       );
 
-    return resolved
-      .map(
-        normalizeOdds
-      )
-      .filter(Boolean);
+    const markets =
+      resolved
+        .map(
+          normalizeOdds
+        )
+        .filter(Boolean);
 
-  } catch {
+    if (markets.length) {
+      setDiagnostic(
+        match,
+        'OK',
+        'Mercado O/U utilizable.',
+        {
+          received:
+            items.length,
+
+          parsed:
+            markets.length
+        }
+      );
+
+      return markets;
+    }
+
+    const rawTotals =
+      resolved.filter(
+        hasRawTotal
+      ).length;
+
+    if (rawTotals > 0) {
+      setDiagnostic(
+        match,
+        'PARSE_ERROR',
+        'ESPN publicó un total, pero el formato no pasó la validación.',
+        {
+          received:
+            items.length,
+
+          rawTotals,
+
+          parsed: 0
+        }
+      );
+    } else {
+      setDiagnostic(
+        match,
+        'NO_MARKET',
+        'ESPN respondió, pero no publicó un total O/U para este partido.',
+        {
+          received:
+            items.length,
+
+          rawTotals: 0,
+
+          parsed: 0
+        }
+      );
+    }
+
+    return [];
+
+  } catch (error) {
+    setDiagnostic(
+      match,
+      'ODDS_ERROR',
+      error?.message ||
+      'No fue posible consultar ESPN Odds.',
+      {
+        received: 0,
+        parsed: 0
+      }
+    );
+
     return [];
   }
 }
+

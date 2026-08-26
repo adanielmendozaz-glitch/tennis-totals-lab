@@ -33,9 +33,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run audit tests
-        run: npm test
-
       - name: Build Vite
         run: npm run build
 

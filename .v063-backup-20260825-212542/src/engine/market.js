@@ -60,7 +60,7 @@ function americanToDecimal(american) {
   return null;
 }
 
-export function parseOdds(value) {
+function parseOdds(value) {
   if (
     value === null ||
     value === undefined ||

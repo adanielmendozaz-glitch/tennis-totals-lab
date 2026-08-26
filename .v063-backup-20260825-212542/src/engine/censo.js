@@ -144,49 +144,6 @@ export function captureCenso(
     );
 
   const entry = {
-    appVersion:
-      '0.6.3',
-
-    modelVersion:
-      match.totals?.version ??
-      null,
-
-    modelWeights: {
-      structural:
-        match.totals?.weights?.structural ??
-        null,
-
-      bayesian:
-        match.totals?.weights?.bayesian ??
-        null,
-
-      elo:
-        match.totals?.weights?.elo ??
-        null
-    },
-
-    surfaceAudit: {
-      source:
-        match.surfaceMeta?.source ??
-        null,
-
-      confidencePct:
-        match.surfaceMeta?.confidencePct ??
-        null,
-
-      sampleA:
-        match.playerA?.profile?.sample ??
-        null,
-
-      sampleB:
-        match.playerB?.profile?.sample ??
-        null
-    },
-
-    marketObservedAt:
-      match.marketObservedAt ??
-      null,
-
     id,
     matchId: id,
 
@@ -371,7 +328,7 @@ function requiresReview(match) {
   );
 }
 
-export function settleResult(
+function settleResult(
   side,
   line,
   games

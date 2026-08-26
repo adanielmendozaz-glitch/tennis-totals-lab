@@ -155,7 +155,7 @@ function rankingItem(match) {
       match.surface,
 
     startDate:
-      match.date,
+      match.startDate,
 
     playerA:
       match.playerA?.name ||

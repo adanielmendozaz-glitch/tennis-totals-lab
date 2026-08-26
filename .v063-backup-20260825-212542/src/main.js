@@ -1,5 +1,4 @@
 import './style.css';
-import './v063-ui.js';
 import { getTodayMatches } from './data/espn.js';
 import { enrichMatchesWithStats } from './engine/playerStats.js';
 import { enrichMatchesWithMatchup } from './engine/matchup.js';
@@ -115,7 +114,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.3</div>
+        <div class="version">ATP + WTA · v0.6.2</div>
       </div>
 
       <button
@@ -888,7 +887,7 @@ function totalsPanel(match) {
 
         <div class="totals-box-head">
           <span>TOTALS ENGINE</span>
-          <strong>100K ENS</strong>
+          <strong>80K ENS</strong>
         </div>
 
         <div class="totals-pending">
@@ -2449,7 +2448,7 @@ function renderTotalsEngineStart({
     '#totalsEngineProgress'
   ).textContent =
     pending > 0
-      ? `Procesando ${pending} partidos FULL · 40K Markov + 40K Bayes + 20K Elo`
+      ? `Procesando ${pending} partidos FULL · 30K Markov + 30K Bayes + 20K Elo`
       : 'Todos los partidos elegibles ya calculados';
 }
 
