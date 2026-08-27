@@ -50,159 +50,6 @@ export function hasCenso(matchId) {
   );
 }
 
-
-/*
- * v0.6.7 Stake Integrity Hotfix
- *
- * Los primeros builds de v0.6.7 podían crear 1U por defecto
- * aunque el usuario no hubiera confirmado el stake en pantalla.
- * Nunca borramos esa huella: la movemos a REVIEW y conservamos
- * priorStakeUnits dentro del audit.
- */
-export function repairStakeIntegrity() {
-  const store =
-    readStore();
-
-  let changed = 0;
-
-  for (
-    const entry
-    of Object.values(store)
-  ) {
-    if (
-      entry?.appVersion === '0.6.7' &&
-      Number(entry.stakeUnits) > 0 &&
-      !entry.stakeSource
-    ) {
-      const priorStakeUnits =
-        Number(entry.stakeUnits);
-
-      entry.stakeIntegrity = {
-        status: 'REVIEW',
-        reason:
-          'UNCONFIRMED_PRE_HOTFIX',
-        priorStakeUnits,
-        repairedAt:
-          new Date().toISOString()
-      };
-
-      entry.stakeUnits =
-        null;
-
-      if (
-        entry.result &&
-        entry.result.profitUnits !==
-        undefined
-      ) {
-        entry.result.profitUnits =
-          null;
-      }
-
-      changed++;
-    }
-  }
-
-  if (changed > 0) {
-    writeStore(store);
-  }
-
-  return {
-    changed
-  };
-}
-
-export function resolveStakeReview(
-  matchId,
-  stakeValue
-) {
-  const stakeUnits =
-    normalizeStakeUnits(
-      stakeValue,
-      null
-    );
-
-  if (!stakeUnits) {
-    return {
-      ok: false,
-      reason: 'INVALID_STAKE'
-    };
-  }
-
-  const store =
-    readStore();
-
-  const id =
-    String(matchId);
-
-  const entry =
-    store[id];
-
-  if (!entry) {
-    return {
-      ok: false,
-      reason: 'ENTRY_MISSING'
-    };
-  }
-
-  if (
-    entry.stakeIntegrity?.status !==
-    'REVIEW'
-  ) {
-    return {
-      ok: false,
-      reason: 'NOT_IN_REVIEW'
-    };
-  }
-
-  const prior =
-    entry.stakeIntegrity;
-
-  entry.stakeUnits =
-    stakeUnits;
-
-  entry.stakeSource =
-    'USER_CONFIRMED_REVIEW';
-
-  entry.stakeSelectedAt =
-    new Date().toISOString();
-
-  entry.stakeIntegrity = {
-    ...prior,
-    status: 'VERIFIED',
-    confirmedStakeUnits:
-      stakeUnits,
-    confirmedAt:
-      new Date().toISOString()
-  };
-
-  if (
-    ['WIN', 'LOSS', 'PUSH'].includes(
-      entry.result?.status
-    )
-  ) {
-    entry.result.profitUnits =
-      profitUnitsFor({
-        status:
-          entry.result.status,
-        stakeUnits,
-        odds:
-          entry.odds,
-        oddsFormat:
-          entry.oddsFormat
-      });
-  }
-
-  store[id] =
-    entry;
-
-  writeStore(store);
-
-  return {
-    ok: true,
-    entry
-  };
-}
-
 function selectedOdds(
   decision
 ) {
@@ -253,7 +100,7 @@ export function captureCenso(
 
   const stakeUnits =
     normalizeStakeUnits(
-      options.stakeUnits,
+      options.stakeUnits ?? 1,
       null
     );
 
@@ -310,23 +157,6 @@ export function captureCenso(
       match
     );
 
-  if (!readiness.eligible) {
-    return {
-      ok: false,
-      reason: 'READINESS_GATE'
-    };
-  }
-
-  if (
-    decision.audit
-      ?.biasGuardBlocked
-  ) {
-    return {
-      ok: false,
-      reason: 'BIAS_GUARD'
-    };
-  }
-
   const price =
     selectedOdds(
       decision
@@ -334,7 +164,7 @@ export function captureCenso(
 
   const entry = {
     appVersion:
-      '0.6.11',
+      '0.6.7',
 
     modelVersion:
       match.totals?.version ??
@@ -550,17 +380,6 @@ export function captureCenso(
 
     stakeUnits,
 
-    stakeSource:
-      'USER_SELECTED',
-
-    stakeSelectedAt:
-      new Date().toISOString(),
-
-    stakeIntegrity: {
-      status: 'VERIFIED',
-      reason: null
-    },
-
     modelPct:
       Number(
         decision.bestProbabilityPct || 0
@@ -606,133 +425,6 @@ export function captureCenso(
       match.totals
         ?.expectedGames ??
       null,
-
-    directionBiasAudit: {
-      expectedMarketDeltaGames:
-        decision.audit
-          ?.expectedMarketDeltaGames ??
-        null,
-
-      absExpectedMarketDeltaGames:
-        decision.audit
-          ?.absExpectedMarketDeltaGames ??
-        null,
-
-      biasGuardStatus:
-        decision.audit
-          ?.biasGuardStatus ??
-        null,
-
-      structuralFamilyExpected:
-        match.totals
-          ?.diagnostics
-          ?.structuralFamilyExpected ??
-        null,
-
-      familyGap:
-        match.totals
-          ?.diagnostics
-          ?.familyGap ??
-        null
-    },
-
-    matchLengthAudit: {
-      status:
-        match.totals
-          ?.lengthAudit
-          ?.status ??
-        null,
-
-      fairLine:
-        match.totals
-          ?.lengthAudit
-          ?.fairLine ??
-        null,
-
-      matchWinPctA:
-        match.totals
-          ?.lengthAudit
-          ?.matchWinPctA ??
-        null,
-
-      matchWinPctB:
-        match.totals
-          ?.lengthAudit
-          ?.matchWinPctB ??
-        null,
-
-      straightSetsPct:
-        match.totals
-          ?.lengthAudit
-          ?.straightSetsPct ??
-        null,
-
-      decidingSetPct:
-        match.totals
-          ?.lengthAudit
-          ?.decidingSetPct ??
-        null,
-
-      calibration:
-        match.totals
-          ?.lengthAudit
-          ?.calibration ??
-        null
-    },
-
-    holdAudit: {
-      playerA: {
-        finalHoldPct:
-          match.matchup
-            ?.playerA
-            ?.holdPct ??
-          null,
-
-        pointHoldPct:
-          match.matchup
-            ?.playerA
-            ?.pointHoldPct ??
-          null,
-
-        gameCrossCheckPct:
-          match.matchup
-            ?.playerA
-            ?.gameCrossCheckPct ??
-          null,
-
-        correctionPct:
-          match.matchup
-            ?.playerA
-            ?.holdCorrectionPct ??
-          null
-      },
-
-      playerB: {
-        finalHoldPct:
-          match.matchup
-            ?.playerB
-            ?.holdPct ??
-          null,
-
-        pointHoldPct:
-          match.matchup
-            ?.playerB
-            ?.pointHoldPct ??
-          null,
-
-        gameCrossCheckPct:
-          match.matchup
-            ?.playerB
-            ?.gameCrossCheckPct ??
-          null,
-
-        correctionPct:
-          match.matchup
-            ?.playerB
-            ?.holdCorrectionPct ??
-          null
-      }
-    },
 
     models: {
       markov:

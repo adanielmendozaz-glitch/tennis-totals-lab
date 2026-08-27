@@ -1,7 +1,5 @@
 import './style.css';
 import './v068.css';
-import './v0610.css';
-import './v0611.css';
 import './v063-ui.js';
 
 import {
@@ -11,11 +9,6 @@ import {
 import {
   renderMatchLengthAudit
 } from './v0682-ui.js';
-
-import {
-  initHistoricalFairLineValidationUI,
-  renderHistoricalFairLineValidation
-} from './v0610-ui.js';
 
 import { getTodayMatches } from './data/espn.js';
 import { enrichMatchesWithStats } from './engine/playerStats.js';
@@ -40,16 +33,6 @@ import {
 import {
   backfillPendingCenso
 } from './engine/censoBackfill.js';
-
-import {
-  captureDailyRecommendations,
-  captureUserObservation,
-  getRecommendationEntries,
-  hasModelRecommendation,
-  recommendationLedgerSummary,
-  settleRecommendationLedgerFromMatches
-} from './engine/recommendationLedger.js';
-
 
 const app = document.querySelector('#app');
 
@@ -147,7 +130,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.11</div>
+        <div class="version">ATP + WTA · v0.6.9</div>
       </div>
 
       <button
@@ -512,36 +495,6 @@ app.innerHTML = `
 
       </div>
 
-      <section class="recommendation-ledger">
-
-        <div class="recommendation-ledger-head">
-          <div>
-            <span>RECOMMENDATION LEDGER</span>
-            <strong>Registro diario del modelo</strong>
-          </div>
-          <b>NO BANK</b>
-        </div>
-
-        <div class="recommendation-ledger-metrics">
-          <div><span>PLAY</span><strong id="ledgerPlay">0</strong></div>
-          <div><span>LEAN</span><strong id="ledgerLean">0</strong></div>
-          <div><span>PASS</span><strong id="ledgerPass">0</strong></div>
-          <div><span>SETTLED</span><strong id="ledgerSettled">0</strong></div>
-        </div>
-
-        <div class="recommendation-ledger-note">
-          La primera lectura pre-match queda congelada.
-          PLAY, LEAN y PASS usan 1U teórica solo para auditoría.
-          Nunca modifican BANK.
-        </div>
-
-        <div
-          id="recommendationLedgerList"
-          class="recommendation-ledger-list">
-        </div>
-
-      </section>
-
       <div
         id="censoList"
         class="censo-list">
@@ -634,7 +587,6 @@ app.innerHTML = `
 `;
 
 initLabBankUI();
-initHistoricalFairLineValidationUI();
 
 const matchesEl = document.querySelector('#matches');
 const loadingPanel = document.querySelector('#loadingPanel');
@@ -1929,48 +1881,6 @@ function marketPanel(match) {
             : ''
         }
 
-
-        <div class="recommendation-audit-control">
-          <div class="recommendation-audit-title">
-            <span>AUDIT · NO BANK</span>
-            <strong>
-              ${
-                hasModelRecommendation(match.id)
-                  ? '✓ MODELO CONGELADO'
-                  : 'SNAPSHOT PENDIENTE'
-              }
-            </strong>
-          </div>
-
-          <div class="recommendation-observation">
-            <select
-              data-observation-side
-              aria-label="Lado para observación">
-              <option
-                value="OVER"
-                ${side === 'OVER' ? 'selected' : ''}>
-                OBSERVAR OVER
-              </option>
-              <option
-                value="UNDER"
-                ${side === 'UNDER' ? 'selected' : ''}>
-                OBSERVAR UNDER
-              </option>
-            </select>
-
-            <button
-              type="button"
-              data-observation-capture="${match.id}">
-              REGISTRAR
-            </button>
-          </div>
-
-          <div class="recommendation-audit-caption">
-            Puedes registrar OVER o UNDER aunque el modelo marque PASS.
-            Es una observación teórica de 1U y no altera BANK.
-          </div>
-        </div>
-
       </div>
 
     </div>
@@ -2506,152 +2416,6 @@ function renderRanking() {
 }
 
 
-
-function ledgerResultText(entry) {
-  const status =
-    entry.result?.status ||
-    'PENDING';
-
-  if (
-    ['WIN', 'LOSS', 'PUSH']
-      .includes(status)
-  ) {
-    const profit =
-      Number(
-        entry.result
-          ?.paperProfitUnits
-      );
-
-    return Number.isFinite(profit)
-      ? `${status} · ${profit >= 0 ? '+' : ''}${profit.toFixed(2)}U`
-      : status;
-  }
-
-  return status;
-}
-
-function recommendationLedgerCard(entry) {
-  const recommendation =
-    entry.recommendation ||
-    'PASS';
-
-  const result =
-    entry.result?.status ||
-    'PENDING';
-
-  return `
-    <article class="recommendation-entry">
-      <div class="recommendation-entry-main">
-        <span>
-          ${entry.tour}
-          · ${entry.surface}
-          · ${
-            entry.kind === 'USER_OBSERVATION'
-              ? entry.isOverride
-                ? 'USER OVERRIDE'
-                : 'USER OBS'
-              : 'MODEL'
-          }
-        </span>
-
-        <strong>
-          ${entry.playerA} vs ${entry.playerB}
-        </strong>
-
-        <div class="recommendation-entry-pick">
-          <b>
-            ${entry.side}
-            ${Number(entry.line).toFixed(1)}
-          </b>
-
-          <span>
-            ${
-              entry.modelPct !== null
-                ? `${Number(entry.modelPct).toFixed(1)}%`
-                : '—'
-            }
-          </span>
-
-          <span>
-            EDGE ${
-              entry.edgePct !== null
-                ? `${Number(entry.edgePct) >= 0 ? '+' : ''}${Number(entry.edgePct).toFixed(1)} pp`
-                : '—'
-            }
-          </span>
-
-          <span>
-            ${censoDate(entry.capturedAt)}
-          </span>
-        </div>
-      </div>
-
-      <div class="recommendation-entry-status">
-        <b class="${recommendation.toLowerCase()}">
-          ${recommendation}
-        </b>
-
-        <small class="${result.toLowerCase()}">
-          ${ledgerResultText(entry)}
-        </small>
-      </div>
-    </article>
-  `;
-}
-
-function renderRecommendationLedger() {
-  const entries =
-    getRecommendationEntries();
-
-  const today =
-    recommendationLedgerSummary(
-      entries,
-      { todayOnly: true }
-    );
-
-  const list =
-    document.querySelector(
-      '#recommendationLedgerList'
-    );
-
-  if (!list) {
-    return;
-  }
-
-  document.querySelector('#ledgerPlay').textContent =
-    today.play;
-
-  document.querySelector('#ledgerLean').textContent =
-    today.lean;
-
-  document.querySelector('#ledgerPass').textContent =
-    today.pass;
-
-  document.querySelector('#ledgerSettled').textContent =
-    today.settled;
-
-  if (!entries.length) {
-    list.innerHTML = `
-      <div class="censo-empty">
-        <strong>Sin recomendaciones registradas</strong>
-        <span>
-          Al analizar una línea O/U,
-          el primer snapshot del modelo
-          aparecerá aquí.
-        </span>
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML =
-    entries
-      .slice(0, 20)
-      .map(recommendationLedgerCard)
-      .join('');
-}
-
-
 function censoDate(value) {
   if (!value) {
     return '—';
@@ -2850,12 +2614,6 @@ function renderCenso() {
     matches
   );
 
-  settleRecommendationLedgerFromMatches(
-    matches
-  );
-
-  renderRecommendationLedger();
-
   const entries =
     getCensoEntries();
 
@@ -2940,14 +2698,9 @@ function renderCenso() {
 }
 
 function renderMatches() {
-  captureDailyRecommendations(
-    matches
-  );
-
   renderRanking();
   renderCenso();
   renderLabBank();
-  renderHistoricalFairLineValidation();
   renderDirectionAudit(matches);
   renderMatchLengthAudit(matches);
 
@@ -4222,77 +3975,6 @@ document.addEventListener(
   }
 );
 
-
-
-document.addEventListener(
-  'click',
-  event => {
-    const button =
-      event.target.closest(
-        '[data-observation-capture]'
-      );
-
-    if (!button) {
-      return;
-    }
-
-    const matchId =
-      button.getAttribute(
-        'data-observation-capture'
-      );
-
-    const match =
-      matches.find(
-        item =>
-          String(item.id) ===
-          String(matchId)
-      );
-
-    if (!match) {
-      return;
-    }
-
-    const marketBox =
-      button.closest(
-        '.market-box'
-      );
-
-    const side =
-      marketBox
-        ?.querySelector(
-          '[data-observation-side]'
-        )
-        ?.value;
-
-    const result =
-      captureUserObservation(
-        match,
-        side
-      );
-
-    if (!result.ok) {
-      if (
-        result.reason ===
-        'ALREADY_CAPTURED'
-      ) {
-        alert(
-          `${side} ya está registrado para este partido.`
-        );
-      } else {
-        alert(
-          'No fue posible registrar la observación.'
-        );
-      }
-      return;
-    }
-
-    renderCenso();
-
-    alert(
-      `${side} guardado en Recommendation Ledger. No afecta BANK.`
-    );
-  }
-);
 
 async function refresh() {
   if (loading) return;

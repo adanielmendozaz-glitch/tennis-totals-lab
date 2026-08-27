@@ -1,22 +1,5 @@
 import './style.css';
-import './v068.css';
-import './v0610.css';
-import './v0611.css';
 import './v063-ui.js';
-
-import {
-  renderDirectionAudit
-} from './v0681-ui.js';
-
-import {
-  renderMatchLengthAudit
-} from './v0682-ui.js';
-
-import {
-  initHistoricalFairLineValidationUI,
-  renderHistoricalFairLineValidation
-} from './v0610-ui.js';
-
 import { getTodayMatches } from './data/espn.js';
 import { enrichMatchesWithStats } from './engine/playerStats.js';
 import { enrichMatchesWithMatchup } from './engine/matchup.js';
@@ -24,11 +7,6 @@ import { getMatchMarkets } from './data/espnOdds.js';
 import { evaluateMarket } from './engine/market.js';
 import { getMarketReadiness } from './engine/readiness.js';
 import { buildRanking } from './engine/ranking.js';
-
-import {
-  initLabBankUI,
-  renderLabBank
-} from './ui/labBankV068.js';
 
 import {
   getCensoEntries,
@@ -40,16 +18,6 @@ import {
 import {
   backfillPendingCenso
 } from './engine/censoBackfill.js';
-
-import {
-  captureDailyRecommendations,
-  captureUserObservation,
-  getRecommendationEntries,
-  hasModelRecommendation,
-  recommendationLedgerSummary,
-  settleRecommendationLedgerFromMatches
-} from './engine/recommendationLedger.js';
-
 
 const app = document.querySelector('#app');
 
@@ -147,7 +115,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.11</div>
+        <div class="version">ATP + WTA · v0.6.6</div>
       </div>
 
       <button
@@ -512,36 +480,6 @@ app.innerHTML = `
 
       </div>
 
-      <section class="recommendation-ledger">
-
-        <div class="recommendation-ledger-head">
-          <div>
-            <span>RECOMMENDATION LEDGER</span>
-            <strong>Registro diario del modelo</strong>
-          </div>
-          <b>NO BANK</b>
-        </div>
-
-        <div class="recommendation-ledger-metrics">
-          <div><span>PLAY</span><strong id="ledgerPlay">0</strong></div>
-          <div><span>LEAN</span><strong id="ledgerLean">0</strong></div>
-          <div><span>PASS</span><strong id="ledgerPass">0</strong></div>
-          <div><span>SETTLED</span><strong id="ledgerSettled">0</strong></div>
-        </div>
-
-        <div class="recommendation-ledger-note">
-          La primera lectura pre-match queda congelada.
-          PLAY, LEAN y PASS usan 1U teórica solo para auditoría.
-          Nunca modifican BANK.
-        </div>
-
-        <div
-          id="recommendationLedgerList"
-          class="recommendation-ledger-list">
-        </div>
-
-      </section>
-
       <div
         id="censoList"
         class="censo-list">
@@ -632,9 +570,6 @@ app.innerHTML = `
 
   </main>
 `;
-
-initLabBankUI();
-initHistoricalFairLineValidationUI();
 
 const matchesEl = document.querySelector('#matches');
 const loadingPanel = document.querySelector('#loadingPanel');
@@ -1071,32 +1006,6 @@ function totalsFingerprint(match) {
     match.matchup?.playerB?.servePointPct,
     match.matchup?.playerA?.holdPct,
     match.matchup?.playerB?.holdPct,
-
-    match.playerA
-      ?.profile
-      ?.holdPct,
-
-    match.playerA
-      ?.profile
-      ?.breakPct,
-
-    match.playerA
-      ?.profile
-      ?.ratingBlend,
-
-    match.playerB
-      ?.profile
-      ?.holdPct,
-
-    match.playerB
-      ?.profile
-      ?.breakPct,
-
-    match.playerB
-      ?.profile
-      ?.ratingBlend,
-
-    'ML-0.1.0',
     TOTALS_SIMULATIONS
   ].join('|');
 }
@@ -1116,206 +1025,6 @@ function curveForDisplay(totals) {
       (a, b) =>
         a.line - b.line
     );
-}
-
-function matchLengthPanel(
-  match,
-  totals
-) {
-  const audit =
-    totals?.lengthAudit;
-
-  if (!audit) {
-    return '';
-  }
-
-  const calibration =
-    audit.calibration || {};
-
-  const status =
-    audit.status ||
-    'UNKNOWN';
-
-  const score =
-    audit.scoreProbabilities ||
-    {};
-
-  const scoreRows =
-    totals.bestOf === 3
-      ? [
-          ['2-0 A', score['2-0']],
-          ['2-1 A', score['2-1']],
-          ['0-2 B', score['0-2']],
-          ['1-2 B', score['1-2']]
-        ]
-      : [];
-
-  const holdBefore =
-    Number.isFinite(
-      Number(
-        calibration
-          .baseHoldGapPp
-      )
-    )
-      ? Number(
-          calibration
-            .baseHoldGapPp
-        ).toFixed(1)
-      : '—';
-
-  const holdAfter =
-    Number.isFinite(
-      Number(
-        calibration
-          .calibratedHoldGapPp
-      )
-    )
-      ? Number(
-          calibration
-            .calibratedHoldGapPp
-        ).toFixed(1)
-      : '—';
-
-  const strength =
-    Number.isFinite(
-      Number(
-        calibration
-          .strengthGapPp
-      )
-    )
-      ? `${
-          Number(
-            calibration
-              .strengthGapPp
-          ) >= 0
-            ? '+'
-            : ''
-        }${Number(
-          calibration
-            .strengthGapPp
-        ).toFixed(2)}`
-      : '—';
-
-  return `
-    <div class="match-length-card ${status.toLowerCase()}">
-
-      <div class="match-length-card-head">
-        <div>
-          <span>MATCH LENGTH · FAIR LINE</span>
-          <strong>
-            ${calibration.dominantSide === 'A'
-              ? `${match.playerA.shortName || match.playerA.name} EDGE`
-              : calibration.dominantSide === 'B'
-                ? `${match.playerB.shortName || match.playerB.name} EDGE`
-                : 'BALANCED'}
-          </strong>
-        </div>
-
-        <b>${status}</b>
-      </div>
-
-      <div class="match-length-card-grid">
-
-        <div>
-          <span>FAIR TOTAL</span>
-          <strong>
-            ${audit.fairLine !== null
-              ? audit.fairLine.toFixed(1)
-              : '—'}
-          </strong>
-        </div>
-
-        <div>
-          <span>A MATCH WIN</span>
-          <strong>
-            ${audit.matchWinPctA.toFixed(1)}%
-          </strong>
-        </div>
-
-        <div>
-          <span>B MATCH WIN</span>
-          <strong>
-            ${audit.matchWinPctB.toFixed(1)}%
-          </strong>
-        </div>
-
-        <div>
-          <span>STRAIGHT SETS</span>
-          <strong>
-            ${audit.straightSetsPct.toFixed(1)}%
-          </strong>
-        </div>
-
-        <div>
-          <span>DECIDING SET</span>
-          <strong>
-            ${audit.decidingSetPct.toFixed(1)}%
-          </strong>
-        </div>
-
-        <div>
-          <span>STRENGTH GAP</span>
-          <strong>
-            ${strength} pp
-          </strong>
-        </div>
-
-        <div>
-          <span>HOLD GAP</span>
-          <strong>
-            ${holdBefore} → ${holdAfter} pp
-          </strong>
-        </div>
-
-        <div>
-          <span>EVIDENCE</span>
-          <strong>
-            ${Number(
-              calibration
-                .evidencePct || 0
-            ).toFixed(1)}%
-          </strong>
-        </div>
-
-      </div>
-
-      ${
-        scoreRows.length
-          ? `
-            <div class="match-length-scorelines">
-              ${scoreRows.map(
-                ([label, value]) => `
-                  <span>
-                    ${label}
-                    <strong>
-                      ${Number(value || 0).toFixed(1)}%
-                    </strong>
-                  </span>
-                `
-              ).join('')}
-            </div>
-          `
-          : ''
-      }
-
-      ${
-        status === 'COMPRESSION'
-          ? `
-            <div class="match-length-warning">
-              LENGTH COMPRESSION · MARKET BLOQUEADO
-            </div>
-          `
-          : status === 'WATCH'
-            ? `
-              <div class="match-length-watch">
-                LENGTH WATCH · revisar diferencia de fuerza
-              </div>
-            `
-            : ''
-      }
-
-    </div>
-  `;
 }
 
 function totalsPanel(match) {
@@ -1480,11 +1189,6 @@ function totalsPanel(match) {
         </span>
 
       </div>
-
-      ${matchLengthPanel(
-        match,
-        totals
-      )}
 
       ${
         totals.shadowAudit?.available
@@ -1892,84 +1596,24 @@ function marketPanel(match) {
             recommendation
           )
             ? `
-              <div class="censo-unit-control">
-                <label>
-                  <span>STAKE</span>
-                  <select
-                    data-censo-units
-                    ${
-                      hasCenso(match.id)
-                        ? 'disabled'
-                        : ''
-                    }>
-                    <option value="0.25">0.25 U</option>
-                    <option value="0.5">0.50 U</option>
-                    <option value="0.75">0.75 U</option>
-                    <option value="1" selected>1.00 U</option>
-                  </select>
-                </label>
-
-                <button
-                  type="button"
-                  class="censo-capture-btn"
-                  data-censo-capture="${match.id}"
-                  ${
-                    hasCenso(match.id)
-                      ? 'disabled'
-                      : ''
-                  }>
-                  ${
-                    hasCenso(match.id)
-                      ? '✓ EN CENSO'
-                      : 'REGISTRAR CENSO'
-                  }
-                </button>
-              </div>
+              <button
+                type="button"
+                class="censo-capture-btn"
+                data-censo-capture="${match.id}"
+                ${
+                  hasCenso(match.id)
+                    ? 'disabled'
+                    : ''
+                }>
+                ${
+                  hasCenso(match.id)
+                    ? '✓ EN CENSO'
+                    : 'REGISTRAR CENSO'
+                }
+              </button>
             `
             : ''
         }
-
-
-        <div class="recommendation-audit-control">
-          <div class="recommendation-audit-title">
-            <span>AUDIT · NO BANK</span>
-            <strong>
-              ${
-                hasModelRecommendation(match.id)
-                  ? '✓ MODELO CONGELADO'
-                  : 'SNAPSHOT PENDIENTE'
-              }
-            </strong>
-          </div>
-
-          <div class="recommendation-observation">
-            <select
-              data-observation-side
-              aria-label="Lado para observación">
-              <option
-                value="OVER"
-                ${side === 'OVER' ? 'selected' : ''}>
-                OBSERVAR OVER
-              </option>
-              <option
-                value="UNDER"
-                ${side === 'UNDER' ? 'selected' : ''}>
-                OBSERVAR UNDER
-              </option>
-            </select>
-
-            <button
-              type="button"
-              data-observation-capture="${match.id}">
-              REGISTRAR
-            </button>
-          </div>
-
-          <div class="recommendation-audit-caption">
-            Puedes registrar OVER o UNDER aunque el modelo marque PASS.
-            Es una observación teórica de 1U y no altera BANK.
-          </div>
-        </div>
 
       </div>
 
@@ -2506,152 +2150,6 @@ function renderRanking() {
 }
 
 
-
-function ledgerResultText(entry) {
-  const status =
-    entry.result?.status ||
-    'PENDING';
-
-  if (
-    ['WIN', 'LOSS', 'PUSH']
-      .includes(status)
-  ) {
-    const profit =
-      Number(
-        entry.result
-          ?.paperProfitUnits
-      );
-
-    return Number.isFinite(profit)
-      ? `${status} · ${profit >= 0 ? '+' : ''}${profit.toFixed(2)}U`
-      : status;
-  }
-
-  return status;
-}
-
-function recommendationLedgerCard(entry) {
-  const recommendation =
-    entry.recommendation ||
-    'PASS';
-
-  const result =
-    entry.result?.status ||
-    'PENDING';
-
-  return `
-    <article class="recommendation-entry">
-      <div class="recommendation-entry-main">
-        <span>
-          ${entry.tour}
-          · ${entry.surface}
-          · ${
-            entry.kind === 'USER_OBSERVATION'
-              ? entry.isOverride
-                ? 'USER OVERRIDE'
-                : 'USER OBS'
-              : 'MODEL'
-          }
-        </span>
-
-        <strong>
-          ${entry.playerA} vs ${entry.playerB}
-        </strong>
-
-        <div class="recommendation-entry-pick">
-          <b>
-            ${entry.side}
-            ${Number(entry.line).toFixed(1)}
-          </b>
-
-          <span>
-            ${
-              entry.modelPct !== null
-                ? `${Number(entry.modelPct).toFixed(1)}%`
-                : '—'
-            }
-          </span>
-
-          <span>
-            EDGE ${
-              entry.edgePct !== null
-                ? `${Number(entry.edgePct) >= 0 ? '+' : ''}${Number(entry.edgePct).toFixed(1)} pp`
-                : '—'
-            }
-          </span>
-
-          <span>
-            ${censoDate(entry.capturedAt)}
-          </span>
-        </div>
-      </div>
-
-      <div class="recommendation-entry-status">
-        <b class="${recommendation.toLowerCase()}">
-          ${recommendation}
-        </b>
-
-        <small class="${result.toLowerCase()}">
-          ${ledgerResultText(entry)}
-        </small>
-      </div>
-    </article>
-  `;
-}
-
-function renderRecommendationLedger() {
-  const entries =
-    getRecommendationEntries();
-
-  const today =
-    recommendationLedgerSummary(
-      entries,
-      { todayOnly: true }
-    );
-
-  const list =
-    document.querySelector(
-      '#recommendationLedgerList'
-    );
-
-  if (!list) {
-    return;
-  }
-
-  document.querySelector('#ledgerPlay').textContent =
-    today.play;
-
-  document.querySelector('#ledgerLean').textContent =
-    today.lean;
-
-  document.querySelector('#ledgerPass').textContent =
-    today.pass;
-
-  document.querySelector('#ledgerSettled').textContent =
-    today.settled;
-
-  if (!entries.length) {
-    list.innerHTML = `
-      <div class="censo-empty">
-        <strong>Sin recomendaciones registradas</strong>
-        <span>
-          Al analizar una línea O/U,
-          el primer snapshot del modelo
-          aparecerá aquí.
-        </span>
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML =
-    entries
-      .slice(0, 20)
-      .map(recommendationLedgerCard)
-      .join('');
-}
-
-
 function censoDate(value) {
   if (!value) {
     return '—';
@@ -2762,21 +2260,6 @@ function censoCard(entry) {
         </span>
 
         <span>
-          STAKE
-          <strong>
-            ${
-              entry.stakeIntegrity?.status === 'REVIEW'
-                ? 'STAKE REVIEW'
-                : Number.isFinite(
-                    Number(entry.stakeUnits)
-                  )
-                  ? `${Number(entry.stakeUnits).toFixed(2)} U`
-                  : 'LEGACY'
-            }
-          </strong>
-        </span>
-
-        <span>
           READINESS
           <strong>
             ${Number(entry.readiness).toFixed(1)}%
@@ -2812,16 +2295,6 @@ function censoCard(entry) {
               </strong>
 
               ${
-                Number.isFinite(
-                  Number(
-                    entry.result?.profitUnits
-                  )
-                )
-                  ? `<span class="censo-profit ${Number(entry.result.profitUnits) >= 0 ? 'positive' : 'negative'}">P/L ${Number(entry.result.profitUnits) >= 0 ? '+' : ''}${Number(entry.result.profitUnits).toFixed(2)} U</span>`
-                  : ''
-              }
-
-              ${
                 entry.result?.note
                   ? `<span>${entry.result.note}</span>`
                   : ''
@@ -2849,12 +2322,6 @@ function renderCenso() {
   settleCensoFromMatches(
     matches
   );
-
-  settleRecommendationLedgerFromMatches(
-    matches
-  );
-
-  renderRecommendationLedger();
 
   const entries =
     getCensoEntries();
@@ -2940,16 +2407,8 @@ function renderCenso() {
 }
 
 function renderMatches() {
-  captureDailyRecommendations(
-    matches
-  );
-
   renderRanking();
   renderCenso();
-  renderLabBank();
-  renderHistoricalFairLineValidation();
-  renderDirectionAudit(matches);
-  renderMatchLengthAudit(matches);
 
   const list = filteredMatches();
 
@@ -4168,28 +3627,9 @@ document.addEventListener(
       return;
     }
 
-    const marketBox =
-      button.closest(
-        '.market-box'
-      );
-
-    const units =
-      Number(
-        marketBox
-          ?.querySelector(
-            '[data-censo-units]'
-          )
-          ?.value ||
-        1
-      );
-
     const result =
       captureCenso(
-        match,
-        {
-          stakeUnits:
-            units
-        }
+        match
       );
 
     if (!result.ok) {
@@ -4222,77 +3662,6 @@ document.addEventListener(
   }
 );
 
-
-
-document.addEventListener(
-  'click',
-  event => {
-    const button =
-      event.target.closest(
-        '[data-observation-capture]'
-      );
-
-    if (!button) {
-      return;
-    }
-
-    const matchId =
-      button.getAttribute(
-        'data-observation-capture'
-      );
-
-    const match =
-      matches.find(
-        item =>
-          String(item.id) ===
-          String(matchId)
-      );
-
-    if (!match) {
-      return;
-    }
-
-    const marketBox =
-      button.closest(
-        '.market-box'
-      );
-
-    const side =
-      marketBox
-        ?.querySelector(
-          '[data-observation-side]'
-        )
-        ?.value;
-
-    const result =
-      captureUserObservation(
-        match,
-        side
-      );
-
-    if (!result.ok) {
-      if (
-        result.reason ===
-        'ALREADY_CAPTURED'
-      ) {
-        alert(
-          `${side} ya está registrado para este partido.`
-        );
-      } else {
-        alert(
-          'No fue posible registrar la observación.'
-        );
-      }
-      return;
-    }
-
-    renderCenso();
-
-    alert(
-      `${side} guardado en Recommendation Ledger. No afecta BANK.`
-    );
-  }
-);
 
 async function refresh() {
   if (loading) return;
@@ -4528,13 +3897,6 @@ document.querySelectorAll('[data-tab]')
         .forEach(b => b.classList.remove('selected'));
 
       button.classList.add('selected');
-
-      if (
-        activeTab === 'lab' ||
-        activeTab === 'bank'
-      ) {
-        renderLabBank();
-      }
     });
   });
 

@@ -1,0 +1,226 @@
+/* v0.6.11 — Recommendation Ledger */
+
+.recommendation-ledger {
+  margin: 22px 0 26px;
+  border: 1px solid rgba(89, 226, 153, .22);
+  border-radius: 24px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(8,45,31,.78), rgba(3,23,16,.96));
+}
+
+.recommendation-ledger-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.recommendation-ledger-head span,
+.recommendation-audit-title span {
+  display: block;
+  color: #59e299;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .11em;
+}
+
+.recommendation-ledger-head strong {
+  display: block;
+  margin-top: 4px;
+  color: #f4f7f5;
+  font-size: 19px;
+}
+
+.recommendation-ledger-head b {
+  color: #8fa79a;
+  font-size: 11px;
+}
+
+.recommendation-ledger-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.recommendation-ledger-metrics > div {
+  min-width: 0;
+  padding: 16px 12px;
+  border-right: 1px solid rgba(255,255,255,.08);
+}
+
+.recommendation-ledger-metrics > div:last-child {
+  border-right: 0;
+}
+
+.recommendation-ledger-metrics span {
+  display: block;
+  color: #667d71;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.recommendation-ledger-metrics strong {
+  display: block;
+  margin-top: 4px;
+  color: #f1f5f2;
+  font-size: 21px;
+}
+
+.recommendation-ledger-note {
+  padding: 13px 20px;
+  color: #789084;
+  font-size: 12px;
+  line-height: 1.45;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+
+.recommendation-ledger-list {
+  display: grid;
+}
+
+.recommendation-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+
+.recommendation-entry:last-child {
+  border-bottom: 0;
+}
+
+.recommendation-entry-main {
+  min-width: 0;
+}
+
+.recommendation-entry-main > span {
+  color: #72877d;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.recommendation-entry-main > strong {
+  display: block;
+  margin: 5px 0;
+  color: #eef4f0;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recommendation-entry-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #87998f;
+  font-size: 11px;
+}
+
+.recommendation-entry-pick b {
+  color: #e8efeb;
+}
+
+.recommendation-entry-status {
+  text-align: right;
+}
+
+.recommendation-entry-status b {
+  display: inline-block;
+  padding: 6px 9px;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.recommendation-entry-status b.play {
+  background: rgba(56,211,132,.18);
+  color: #65e9a4;
+}
+
+.recommendation-entry-status b.lean {
+  background: rgba(216,179,64,.16);
+  color: #e9ce70;
+}
+
+.recommendation-entry-status b.pass {
+  background: rgba(123,137,130,.14);
+  color: #9daca4;
+}
+
+.recommendation-entry-status small {
+  display: block;
+  margin-top: 7px;
+  color: #7e9388;
+  font-size: 10px;
+}
+
+.recommendation-entry-status small.win { color: #63e6a0; }
+.recommendation-entry-status small.loss { color: #ef8f7b; }
+.recommendation-entry-status small.push,
+.recommendation-entry-status small.pending { color: #a0afa7; }
+
+.recommendation-audit-control {
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+
+.recommendation-audit-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.recommendation-audit-title strong {
+  color: #59e299;
+  font-size: 10px;
+}
+
+.recommendation-observation {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.recommendation-observation select,
+.recommendation-observation button {
+  min-height: 44px;
+  border-radius: 13px;
+  border: 1px solid rgba(89,226,153,.25);
+  background: rgba(4,28,19,.96);
+  color: #eaf4ee;
+  font-weight: 800;
+}
+
+.recommendation-observation select { padding: 0 12px; }
+
+.recommendation-observation button {
+  padding: 0 14px;
+  color: #59e299;
+}
+
+.recommendation-audit-caption {
+  margin-top: 9px;
+  color: #6f8479;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+@media (max-width: 430px) {
+  .recommendation-ledger-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .recommendation-ledger-metrics > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .recommendation-ledger-metrics > div:nth-child(-n+2) {
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+}

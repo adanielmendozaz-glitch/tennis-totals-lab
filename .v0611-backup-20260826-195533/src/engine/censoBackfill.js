@@ -7,11 +7,6 @@ import {
   settleCensoFromMatches
 } from './censo.js';
 
-import {
-  getRecommendationEntries,
-  settleRecommendationLedgerFromMatches
-} from './recommendationLedger.js';
-
 const MIN_INTERVAL =
   15 * 60 * 1000;
 
@@ -124,10 +119,8 @@ function shiftDateKey(
 }
 
 function pendingDateKeys() {
-  const entries = [
-    ...getCensoEntries(),
-    ...getRecommendationEntries()
-  ];
+  const entries =
+    getCensoEntries();
 
   const today =
     localDateKey();
@@ -224,11 +217,6 @@ async function runBackfill() {
 
       changed +=
         settleCensoFromMatches(
-          result.matches
-        );
-
-      changed +=
-        settleRecommendationLedgerFromMatches(
           result.matches
         );
 

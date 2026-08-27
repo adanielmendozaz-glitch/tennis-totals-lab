@@ -1,6 +1,6 @@
 {
   "name": "tennis-totals-lab",
-  "version": "0.6.11",
+  "version": "0.6.9",
   "private": true,
   "type": "module",
   "scripts": {

@@ -334,7 +334,7 @@ export function captureCenso(
 
   const entry = {
     appVersion:
-      '0.6.11',
+      '0.6.8.1',
 
     modelVersion:
       match.totals?.version ??
@@ -633,50 +633,6 @@ export function captureCenso(
         match.totals
           ?.diagnostics
           ?.familyGap ??
-        null
-    },
-
-    matchLengthAudit: {
-      status:
-        match.totals
-          ?.lengthAudit
-          ?.status ??
-        null,
-
-      fairLine:
-        match.totals
-          ?.lengthAudit
-          ?.fairLine ??
-        null,
-
-      matchWinPctA:
-        match.totals
-          ?.lengthAudit
-          ?.matchWinPctA ??
-        null,
-
-      matchWinPctB:
-        match.totals
-          ?.lengthAudit
-          ?.matchWinPctB ??
-        null,
-
-      straightSetsPct:
-        match.totals
-          ?.lengthAudit
-          ?.straightSetsPct ??
-        null,
-
-      decidingSetPct:
-        match.totals
-          ?.lengthAudit
-          ?.decidingSetPct ??
-        null,
-
-      calibration:
-        match.totals
-          ?.lengthAudit
-          ?.calibration ??
         null
     },
 
