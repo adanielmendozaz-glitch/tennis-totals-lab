@@ -1,5 +1,6 @@
 import './style.css';
 import './v068.css';
+import './v0610.css';
 import './v063-ui.js';
 
 import {
@@ -9,6 +10,11 @@ import {
 import {
   renderMatchLengthAudit
 } from './v0682-ui.js';
+
+import {
+  initHistoricalFairLineValidationUI,
+  renderHistoricalFairLineValidation
+} from './v0610-ui.js';
 
 import { getTodayMatches } from './data/espn.js';
 import { enrichMatchesWithStats } from './engine/playerStats.js';
@@ -130,7 +136,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.9</div>
+        <div class="version">ATP + WTA · v0.6.10</div>
       </div>
 
       <button
@@ -587,6 +593,7 @@ app.innerHTML = `
 `;
 
 initLabBankUI();
+initHistoricalFairLineValidationUI();
 
 const matchesEl = document.querySelector('#matches');
 const loadingPanel = document.querySelector('#loadingPanel');
@@ -2701,6 +2708,7 @@ function renderMatches() {
   renderRanking();
   renderCenso();
   renderLabBank();
+  renderHistoricalFairLineValidation();
   renderDirectionAudit(matches);
   renderMatchLengthAudit(matches);
 

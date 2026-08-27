@@ -334,7 +334,7 @@ export function captureCenso(
 
   const entry = {
     appVersion:
-      '0.6.9',
+      '0.6.10',
 
     modelVersion:
       match.totals?.version ??
