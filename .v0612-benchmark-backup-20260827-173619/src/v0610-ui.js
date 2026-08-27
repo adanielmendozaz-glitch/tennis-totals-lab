@@ -8,10 +8,6 @@ import {
   summarizeFairLineValidation
 } from './engine/fairLineValidation.js';
 
-import {
-  summarizeModelBenchmark
-} from './engine/modelBenchmark.js';
-
 let running = false;
 let progressText = '';
 
@@ -106,7 +102,7 @@ function latestHtml(rows) {
   if (!rows.length) {
     return `
       <div class="flv-empty">
-        Pulsa ANALIZAR +8 para iniciar el replay.
+        Pulsa ANALIZAR +4 para iniciar el replay.
       </div>
     `;
   }
@@ -155,183 +151,7 @@ function latestHtml(rows) {
   `).join('');
 }
 
-
-function benchmarkStatusClass(code) {
-  if (code === 'STRONG' || code === 'USEFUL') return 'good';
-  if (code === 'DEVELOPING') return 'medium';
-  return 'caution';
-}
-
-function benchmarkCorrelation(value) {
-  const n = Number(value);
-  return Number.isFinite(n)
-    ? n.toFixed(2)
-    : '—';
-}
-
-function benchmarkRowsHtml(rows) {
-  if (!rows.length) {
-    return `
-      <div class="flv-empty">
-        Aún no hay replays v0.6.12 comparables.
-      </div>
-    `;
-  }
-
-  return rows
-    .map(row => `
-      <div class="model-benchmark-row">
-        <div class="model-benchmark-name">
-          <b>#${row.rank || '—'}</b>
-          <div>
-            <strong>${row.label}</strong>
-            <small>N=${row.n}</small>
-          </div>
-        </div>
-
-        <span>
-          MAE
-          <b>${fmt(row.maeGames, 2)}</b>
-        </span>
-
-        <span class="${
-          Number(row.biasGames) > 0
-            ? 'positive-bias'
-            : Number(row.biasGames) < 0
-              ? 'negative-bias'
-              : ''
-        }">
-          BIAS
-          <b>${signed(row.biasGames, ' g')}</b>
-        </span>
-
-        <span>
-          RMSE
-          <b>${fmt(row.rmseGames, 2)}</b>
-        </span>
-
-        <span>
-          OVER-EST
-          <b>${pct(row.overEstimatePct)}</b>
-        </span>
-
-        <span>
-          ±2 G
-          <b>${pct(row.withinTwoPct)}</b>
-        </span>
-      </div>
-    `)
-    .join('');
-}
-
-function benchmarkHtml(benchmark) {
-  const winner =
-    benchmark.bestModel
-      ? benchmark.bestModel.label
-      : 'NO CONCLUSION';
-
-  return `
-    <section class="model-benchmark-card">
-      <div class="flv-section-head model-benchmark-head">
-        <div>
-          <span>MODEL BENCHMARK · ABLATION</span>
-          <strong>¿Qué modelo realmente predice mejor?</strong>
-        </div>
-
-        <b class="${
-          benchmarkStatusClass(
-            benchmark.sample.code
-          )
-        }">
-          ${benchmark.sample.label}
-        </b>
-      </div>
-
-      <div class="model-benchmark-kpis">
-        <article>
-          <span>COMPARABLE</span>
-          <strong>${benchmark.n}</strong>
-          <small>replays con los 4 outputs</small>
-        </article>
-
-        <article>
-          <span>LEADER</span>
-          <strong>${winner}</strong>
-          <small>solo se declara desde N=30</small>
-        </article>
-
-        <article>
-          <span>MARKOV ↔ ELO</span>
-          <strong>
-            ${benchmarkCorrelation(
-              benchmark.correlations.structuralElo
-            )}
-          </strong>
-          <small>
-            ${benchmark.correlations.structuralEloLabel}
-            error correlation
-          </small>
-        </article>
-
-        <article>
-          <span>FAMILY AUDIT</span>
-          <strong>${benchmark.familyStatus}</strong>
-          <small>¿son votos realmente independientes?</small>
-        </article>
-      </div>
-
-      <div class="model-benchmark-list">
-        ${benchmarkRowsHtml(benchmark.models)}
-      </div>
-
-      <div class="model-correlation-grid">
-        <div>
-          <span>MARKOV ↔ BAYES</span>
-          <b>
-            ${benchmarkCorrelation(
-              benchmark.correlations.structuralBayes
-            )}
-          </b>
-          <small>
-            ${benchmark.correlations.structuralBayesLabel}
-          </small>
-        </div>
-
-        <div>
-          <span>BAYES ↔ ELO</span>
-          <b>
-            ${benchmarkCorrelation(
-              benchmark.correlations.bayesElo
-            )}
-          </b>
-          <small>
-            ${benchmark.correlations.bayesEloLabel}
-          </small>
-        </div>
-      </div>
-
-      <div class="flv-note model-benchmark-note">
-        OVER-EST no significa “pick OVER”.
-        Significa que el modelo proyectó más juegos
-        que el total que realmente ocurrió.
-        ${
-          benchmark.legacyWithoutBenchmark
-            ? `${benchmark.legacyWithoutBenchmark} replays anteriores a v0.6.12 se conservan, pero no entran en esta comparación.`
-            : ''
-        }
-        Esta versión mide; NO cambia todavía el predictor de producción.
-      </div>
-    </section>
-  `;
-}
-
-
 function cardHtml(summary, meta) {
-  const benchmark =
-    summarizeModelBenchmark(
-      getHistoricalValidationRecords()
-    );
-
   const biasText =
     summary.biasGames === null
       ? '—'
@@ -465,7 +285,7 @@ function cardHtml(summary, meta) {
         id="flvRunV0610"
         type="button"
         ${running ? 'disabled' : ''}>
-        ${running ? 'ANALIZANDO…' : 'ANALIZAR +8'}
+        ${running ? 'ANALIZANDO…' : 'ANALIZAR +4'}
       </button>
     </div>
 
@@ -474,8 +294,6 @@ function cardHtml(summary, meta) {
       Cada lote usa el mismo ensemble de producción
       (40K Markov + 40K Bayes + 20K Elo).
     </div>
-
-    ${benchmarkHtml(benchmark)}
 
     <div class="flv-section-head">
       <div>
@@ -554,11 +372,11 @@ async function runBatch() {
   try {
     const result =
       await runHistoricalValidationBatch({
-        batchSize: 8,
+        batchSize: 4,
         onProgress: status => {
           progressText =
             status?.message ||
-            `Replay ${status?.completed || 0}/${status?.target || 8}`;
+            `Replay ${status?.completed || 0}/${status?.target || 4}`;
 
           const label =
             document.querySelector('#flvProgressV0610');

@@ -22,7 +22,7 @@ import {
 const STORAGE_KEY =
   'tennis_totals_lab_historical_fairline_v0610';
 
-const AUDIT_VERSION = '0.6.12';
+const AUDIT_VERSION = '0.6.10';
 
 function readStore() {
   try {
@@ -270,38 +270,6 @@ function recordFromMatch(match, totals) {
       actual?.rawScore || '',
     simulations:
       Number(totals?.simulations || 0),
-
-    /*
-     * v0.6.12 MODEL BENCHMARK
-     * Congela las salidas que YA produjo
-     * el mismo ensemble de producción.
-     */
-    modelBenchmarks: {
-      structural:
-        Number(
-          totals?.models
-            ?.structural
-            ?.expectedGames
-        ),
-
-      bayesian:
-        Number(
-          totals?.models
-            ?.bayesian
-            ?.expectedGames
-        ),
-
-      elo:
-        Number(
-          totals?.models
-            ?.elo
-            ?.expectedGames
-        ),
-
-      ensemble:
-        expectedGames
-    },
-
     replayedAt:
       new Date().toISOString()
   };
