@@ -12,6 +12,10 @@ import {
   summarizeModelBenchmark
 } from './engine/modelBenchmark.js';
 
+import {
+  summarizeArchitectureAudit
+} from './engine/architectureAudit.js';
+
 let running = false;
 let progressText = '';
 
@@ -326,10 +330,82 @@ function benchmarkHtml(benchmark) {
 }
 
 
+
+function architectureRowsHtml(rows) {
+  if (!rows.length) return `<div class="flv-empty">Aún no existe un holdout cronológico válido.</div>`;
+
+  return rows.map(row => `
+    <div class="architecture-row">
+      <div class="architecture-name">
+        <b>#${row.rank}</b>
+        <div><strong>${row.label}</strong><small>${row.fit}</small></div>
+      </div>
+      <span>TEST MAE<b>${fmt(row.test.maeGames,2)}</b></span>
+      <span class="${Number(row.test.biasGames)>0?'positive-bias':Number(row.test.biasGames)<0?'negative-bias':''}">
+        TEST BIAS<b>${signed(row.test.biasGames,' g')}</b>
+      </span>
+      <span>RMSE<b>${fmt(row.test.rmseGames,2)}</b></span>
+      <span>OVER-EST<b>${pct(row.test.overEstimatePct)}</b></span>
+      <span>±2 G<b>${pct(row.test.withinTwoPct)}</b></span>
+    </div>
+  `).join('');
+}
+
+function architectureHtml(audit) {
+  const improve = Number.isFinite(Number(audit.best?.improvementVsCurrentPct))
+    ? `${Number(audit.best.improvementVsCurrentPct)>0?'+':''}${Number(audit.best.improvementVsCurrentPct).toFixed(1)}%`
+    : '—';
+
+  return `
+    <section class="architecture-audit-card">
+      <div class="flv-section-head architecture-head">
+        <div>
+          <span>v0.6.13 · WALK-FORWARD ARCHITECTURE</span>
+          <strong>¿Bayes debe reemplazar al ensemble de duración?</strong>
+        </div>
+        <b class="${['STRONG','USEFUL'].includes(audit.sample.code)?'good':'caution'}">${audit.sample.label}</b>
+      </div>
+
+      <div class="architecture-kpis">
+        <article><span>TRAIN</span><strong>${audit.split.train.length}</strong><small>${audit.split.trainRange||'—'}</small></article>
+        <article><span>HOLDOUT FUTURO</span><strong>${audit.split.test.length}</strong><small>${audit.split.testRange||'—'}</small></article>
+        <article><span>BEST HOLDOUT</span><strong>${audit.best?.label||'NO CONCLUSION'}</strong><small>sin entrenar con el test</small></article>
+        <article><span>VS CURRENT</span><strong>${improve}</strong><small>mejora MAE holdout</small></article>
+      </div>
+
+      <div class="architecture-promotion ${audit.promotion.status==='CANDIDATE'?'candidate':'hold'}">
+        <div><span>PROMOTION GATE</span><strong>${audit.promotion.status}</strong></div>
+        <p>${audit.promotion.reason}</p>
+      </div>
+
+      <div class="architecture-list">${architectureRowsHtml(audit.candidates)}</div>
+
+      <div class="architecture-strength">
+        <div><span>STRENGTH SNAPSHOTS</span><strong>${audit.strengthCoverage.n}</strong><small>${pct(audit.strengthCoverage.pct)} comparables</small></div>
+        <p>Desde v0.6.13 congelamos el gap de fuerza por separado para probar después Bayes + riesgo de straight sets sin contar Elo como otro voto de total.</p>
+      </div>
+
+      <div class="flv-note architecture-note">
+        Split cronológico estricto: calibra con partidos anteriores y evalúa en fechas posteriores.
+        Si no hay fechas separadas suficientes, falla cerrado. Esta actualización todavía NO cambia picks de producción.
+      </div>
+    </section>
+  `;
+}
+
+
 function cardHtml(summary, meta) {
+  const records =
+    getHistoricalValidationRecords();
+
   const benchmark =
     summarizeModelBenchmark(
-      getHistoricalValidationRecords()
+      records
+    );
+
+  const architecture =
+    summarizeArchitectureAudit(
+      records
     );
 
   const biasText =
@@ -476,6 +552,8 @@ function cardHtml(summary, meta) {
     </div>
 
     ${benchmarkHtml(benchmark)}
+
+    ${architectureHtml(architecture)}
 
     <div class="flv-section-head">
       <div>

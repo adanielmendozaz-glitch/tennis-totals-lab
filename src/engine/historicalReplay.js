@@ -22,7 +22,7 @@ import {
 const STORAGE_KEY =
   'tennis_totals_lab_historical_fairline_v0610';
 
-const AUDIT_VERSION = '0.6.12';
+const AUDIT_VERSION = '0.6.13';
 
 function readStore() {
   try {
@@ -301,6 +301,29 @@ function recordFromMatch(match, totals) {
       ensemble:
         expectedGames
     },
+
+    strengthGapPp:
+      Number.isFinite(Number(totals?.lengthAudit?.calibration?.strengthGapPp))
+        ? Number(totals.lengthAudit.calibration.strengthGapPp)
+        : null,
+
+    matchWinGapPp:
+      Number.isFinite(Number(totals?.lengthAudit?.matchWinPctA)) &&
+      Number.isFinite(Number(totals?.lengthAudit?.matchWinPctB))
+        ? Math.abs(
+            Number(totals.lengthAudit.matchWinPctA) -
+            Number(totals.lengthAudit.matchWinPctB)
+          )
+        : null,
+
+    setWinGapPp:
+      Number.isFinite(Number(totals?.lengthAudit?.setWinPctA)) &&
+      Number.isFinite(Number(totals?.lengthAudit?.setWinPctB))
+        ? Math.abs(
+            Number(totals.lengthAudit.setWinPctA) -
+            Number(totals.lengthAudit.setWinPctB)
+          )
+        : null,
 
     replayedAt:
       new Date().toISOString()

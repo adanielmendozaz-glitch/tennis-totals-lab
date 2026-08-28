@@ -147,7 +147,7 @@ app.innerHTML = `
       <div>
         <div class="eyebrow">DIRECT DATA ENGINE</div>
         <h1>Tennis Totals Lab</h1>
-        <div class="version">ATP + WTA · v0.6.12</div>
+        <div class="version">ATP + WTA · v0.6.13</div>
       </div>
 
       <button
